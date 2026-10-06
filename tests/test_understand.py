@@ -489,6 +489,45 @@ class PhotoGoldenTests(unittest.TestCase):
                     self.assertLess(centres[0], .4); self.assertGreater(centres[1], .6)   # one person each side
 
 
+class PhotoVariantTests(unittest.TestCase):
+    """Cases QA found by resizing/cropping Pari's photos: results must not flip."""
+    def run_variant(self, name, size=None, crop=None, mirror=False):
+        from PIL import Image, ImageOps
+        im = Image.open(ROOT / 'tests' / 'fixtures' / 'photos' / name).convert('RGB')
+        W, H = im.size
+        if crop: im = im.crop((W * crop, H * crop, W * (1 - crop), H * (1 - crop)))
+        if size: k = size / max(im.size); im = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+        if mirror: im = ImageOps.mirror(im)
+        buf = io.BytesIO(); im.save(buf, 'JPEG', quality=88); subject._cache.clear()
+        return subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
+
+    def test_no_false_face_on_cropped_terrazzo(self):
+        self.assertEqual(self.run_variant('bottle-terrazzo.jpg', crop=.1)['source'], 'objects')
+
+    def test_three_friends_at_every_size(self):
+        try:
+            import cv2
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x not installed')
+        for kw in ({'size': 600}, {'size': 900}, {'mirror': True}, {'crop': .1}):
+            r = self.run_variant('three-friends.jpg', **kw)
+            self.assertEqual((r['source'], len(r.get('parts') or [])), ('faces', 3), kw)
+
+    def test_textures_have_no_subject(self):
+        from PIL import Image
+        import random
+        random.seed(3)
+        im = Image.new('RGB', (600, 600))
+        px = im.load()
+        for x in range(600):
+            for y in range(600):
+                v = 90 + (x * 7 + y * 13) % 40 + random.randint(-15, 15)
+                px[x, y] = (v, v - 20, v - 40)
+        buf = io.BytesIO(); im.save(buf, 'JPEG'); subject._cache.clear()
+        self.assertEqual(subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())['source'], 'assumed')
+
+
 class AnalyzeHTTPTests(unittest.TestCase):
     def test_endpoints(self):
         from local_server import ThreadingHTTPServer, Handler

@@ -92,6 +92,7 @@
 
   function drawOverlay() {
     const o = $('xr-overlay'); o.replaceChildren();
+    const late = [];
     const a = S.analysis; if (!a) return;
     const { width: W, height: H } = S.design.page;
     const k = 1 / S.scale;
@@ -149,7 +150,7 @@
         ].filter(([sx, sy]) => sy >= 0 && sy + ph <= H && sx >= 0 && sx + pw <= W + 1);
         const [sx, sy] = spots.find(([sx, sy]) => !hits(sx, sy, pw, ph)) || spots[0] || [x + 6 * k, y + 6 * k];
         placed.push([sx, sy, pw, ph]);
-        pill(G, sx, sy, text, k, { below: true });
+        late.push(() => pill(o, sx, sy, text, k, { below: true }));   // drawn last so frames and badges never hide it
       }
     }
     if (S.on.groups) {
@@ -205,6 +206,7 @@
 
       });
     }
+    late.forEach(f => f());
   }
 
   function setHot(id) {

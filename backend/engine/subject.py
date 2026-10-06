@@ -94,7 +94,7 @@ def _is_monochrome(img) -> bool:
     return a[..., 1].std() < 4 and a[..., 2].std() < 4
 
 
-def _faces(img):
+def _faces(img, omap=None):
     try:
         import cv2
         import numpy as np
@@ -125,7 +125,12 @@ def _faces(img):
     strict = cascade.detectMultiScale(grey, 1.1, 9, minSize=(side, side))
     def strong(f):
         return any(_iou([*f], [*s]) >= .5 for s in strict)
-    found = [f for f in found if has_eye(f) or (f[2] < 60 and strong(f))]
+    def on_subject(f, need=.35):   # a real face is part of a person the object model sees as a subject
+        if omap is None:
+            return True
+        x, y, w, h = (int(v) for v in f)
+        return float(omap[y:y + h, x:x + w].mean()) >= need
+    found = [f for f in found if on_subject(f) and (has_eye(f) or (f[2] < 60 and strong(f)))]
     if len(found):
         # faces under half the main face's size are usually blurred background people; keep them only
         # when both eyes are clearly visible (the third friend walking behind is sharp, a stranger isn't)
@@ -133,7 +138,10 @@ def _faces(img):
         def eyes_n(f):
             x, y, w, h = (int(v) for v in f)
             return len(eyes.detectMultiScale(grey[y:y + int(h * .6), x:x + w], 1.1, 3, minSize=(max(8, w // 10),) * 2))
-        found = [f for f in found if f[2] >= biggest * .5 or (f[2] >= biggest * .3 and eyes_n(f) >= 2)]
+        # (when the object model confirms the face sits on a salient person, one eye is enough: small, slightly
+        # soft faces of people walking behind lose the second eye at lower resolutions)
+        found = [f for f in found if f[2] >= biggest * .5
+                 or (f[2] >= biggest * .3 and (eyes_n(f) >= 2 or (omap is not None and on_subject(f, .6) and eyes_n(f) >= 1)))]
     if len(found) == 0:
         return None
     W, H = img.size
@@ -445,6 +453,8 @@ def objects_from_map(m):
     x0 = min(p[0] for p in parts); y0 = min(p[1] for p in parts)
     x1 = max(p[0] + p[2] for p in parts); y1 = max(p[1] + p[3] for p in parts)
     covered = sum(c['area'] for c in keep)
+    if (x1 - x0) * (y1 - y0) > .8 and covered > .5:
+        return None   # the whole photo lights up: a texture or a frame-filling object, no single subject to crop around
     conf = round(min(1.0, best['mean']) * (0.5 if covered > .6 else 1.0), 3)
     return [x0, y0, x1 - x0, y1 - y0], parts, conf
 
@@ -466,13 +476,13 @@ def _detect(src: str) -> dict:
     if img is None:
         return {'box': CENTRE, 'source': 'assumed', 'confidence': 0.0}
     aspect = round(img.size[0] / img.size[1], 4)
-    face = _faces(img)
+    omap = object_map(img)            # also used to confirm faces
+    face = _faces(img, omap)
     if face:
         box, parts = face
         return {'box': [round(v, 4) for v in box], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect,
                 'parts': [[round(v, 4) for v in p] for p in parts]}
     # 2. the salient-object model (the standard approach in modern cut-out / smart-crop tools)
-    omap = object_map(img)
     if omap is not None:
         found = objects_from_map(omap)
         if found:

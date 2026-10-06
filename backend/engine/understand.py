@@ -488,7 +488,11 @@ def find_blocks(g: Graph, groups: list[dict], repeats: list[dict], dividers: lis
                        or _overlap_1d(A.x, A.r, B.x, B.r) >= .3 * min(A.w, B.w))
             upper, lower = (A, B) if A.y <= B.y else (B, A)
             gap = lower.y - upper.b
-            if aligned and -2 <= gap <= max(H * .08, 1.2 * min(A.h, B.h)) and not _divided(upper, lower, dividers):
+            # an attribution lockup (avatar + name) under a centred quote/headline belongs with it, even with air between
+            attribution = {a['kind'], b['kind']} == {'lockup', a['kind'] if a['kind'] != 'lockup' else b['kind']} \
+                and 'headline' in (a['role'], b['role']) and abs(A.cx - B.cx) <= W * .05
+            limit = H * .18 if attribution else max(H * .08, 1.2 * min(A.h, B.h))
+            if aligned and -2 <= gap <= limit and not _divided(upper, lower, dividers):
                 dsu.union(i, j)
     buckets: dict[int, list[dict]] = {}
     for i, gr in enumerate(cand):
