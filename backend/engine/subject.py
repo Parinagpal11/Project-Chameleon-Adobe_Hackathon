@@ -60,6 +60,8 @@ def _faces(img):
         import numpy as np
     except ImportError:
         return None
+    if not hasattr(cv2, 'CascadeClassifier'):   # OpenCV 5 dropped it; requirements pin 4.x
+        return None
     try:
         grey = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2GRAY)
         cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -75,7 +77,7 @@ def _faces(img):
     fw, fh = x1 - x0, y1 - y0
     x0, x1 = max(0, x0 - fw * .35), min(W, x1 + fw * .35)
     y0, y1 = max(0, y0 - fh * .3), min(H, y1 + fh * 1.2)
-    return [x0 / W, y0 / H, (x1 - x0) / W, (y1 - y0) / H]
+    return [float(x0 / W), float(y0 / H), float((x1 - x0) / W), float((y1 - y0) / H)]
 
 
 def _rgb_to_lab(rgb):

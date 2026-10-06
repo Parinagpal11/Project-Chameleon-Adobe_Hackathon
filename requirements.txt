@@ -1,5 +1,6 @@
 pydantic==2.13.5
 Pillow>=10.0
 numpy>=1.26
-# face detection for photo subjects (optional: without it, saliency is used)
-opencv-python-headless>=4.8
+# face detection for photo subjects (optional: without it, saliency is used).
+# Pinned below 5: OpenCV 5 removed the CascadeClassifier face detector we use.
+opencv-python-headless>=4.8,<5
