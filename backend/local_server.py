@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = service.add_rule(req.campaign, r.type, r.params, r.label, r.source, r.evidence)
                 elif p == '/analyze':
                     result = service.analyze_request(data)
+                elif p == '/adapt':
+                    result = service.adapt_request(data)
                 elif p == '/parse-rule':
                     req = ParseRuleRequest.model_validate(data)
                     result = parse_text(req.text, req.roles)

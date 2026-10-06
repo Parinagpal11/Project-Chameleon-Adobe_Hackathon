@@ -307,6 +307,41 @@ def testset_design(design_id):
     return json.loads(f.read_text())
 
 
+def _clean_targets(targets):
+    from engine.plan import EVAL_SIZES
+    if targets is None:
+        return EVAL_SIZES
+    if not isinstance(targets, list) or len(targets) > 30:
+        raise ValueError('targets must be a list of up to 30 sizes')
+    clean = []
+    for i, t in enumerate(targets):
+        if not isinstance(t, dict):
+            raise ValueError(f'targets[{i}] must be an object like {{"width": 1080, "height": 1350}}')
+        try:
+            w, h = float(t.get('width')), float(t.get('height'))
+        except (TypeError, ValueError):
+            raise ValueError(f'targets[{i}] needs numeric width and height') from None
+        if not (16 <= w <= 8192 and 16 <= h <= 8192):
+            raise ValueError('Each target needs width and height between 16 and 8192')
+        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(w), 'height': int(h)})
+    return clean
+
+
+def adapt_request(data):
+    from engine.adapt import adapt
+    if not isinstance(data, dict) or not isinstance(data.get('design'), dict):
+        raise ValueError('Send {"design": {...}, "targets": [...]} (targets optional)')
+    design = data['design']
+    items = design.get('nodes') if 'nodes' in design else design.get('elements')
+    if isinstance(items, list) and len(items) > MAX_NODES:
+        raise ValueError(f'Designs are limited to {MAX_NODES} nodes')
+    targets = _clean_targets(data.get('targets'))
+    try:
+        return adapt(design, targets)
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f'Malformed design: missing or wrong field {exc}')
+
+
 def analyze_request(data):
     from engine.understand import analyze
     from engine.plan import EVAL_SIZES

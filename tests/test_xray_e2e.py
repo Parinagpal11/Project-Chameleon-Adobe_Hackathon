@@ -89,6 +89,34 @@ class XrayE2E(unittest.TestCase):
         page.set_input_files('#xr-file', str(good))
         page.wait_for_function("document.querySelector('#xr-design').value === 'import:mine.json'")
 
+    def test_resize_tab(self):
+        page = self.open('event-poster')
+        page.click('#tab-resize')
+        page.wait_for_selector('.rz-row')
+        self.assertEqual(page.locator('.rz-row').count(), 8)
+        self.assertEqual(page.locator('.rz-row canvas').count(), 24)
+        self.assertEqual(page.get_attribute('#tab-resize', 'aria-selected'), 'true')
+        self.assertTrue(page.is_hidden('#xr-main'))
+        self.assertIn('8/8', page.inner_text('#rz-score'))
+        self.assertEqual(page.locator('.rz-col.win .rz-tag.bad').count(), 0)
+        # every Chameleon canvas really drew something (not blank)
+        blank = page.evaluate("""[...document.querySelectorAll('.rz-col.win canvas')].filter(c => {
+            const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+            for (let i = 4; i < d.length; i += 4) if (d[i] !== d[0] || d[i+1] !== d[1] || d[i+2] !== d[2]) return false;
+            return true; }).length""")
+        self.assertEqual(blank, 0)
+        # switching design while on Resize re-runs it
+        page.select_option('#xr-design', 'dense-menu')
+        page.wait_for_function("document.querySelector('#rz-title').textContent.toLowerCase().includes('menu')")
+        self.assertEqual(page.locator('.rz-row').count(), 8)
+        page.click('#tab-understand')
+        self.assertTrue(page.is_hidden('#xr-resize'))
+        self.assertEqual(self.errors, [])
+        mob = self.browser.new_page(viewport={'width': 390, 'height': 844})
+        mob.goto(f'{self.base}/xray#d=product-grid'); mob.wait_for_selector('.xr-group')
+        mob.click('#tab-resize'); mob.wait_for_selector('.rz-row')
+        self.assertLessEqual(mob.evaluate('document.documentElement.scrollWidth'), 391)
+
     def test_mobile_has_no_sideways_scroll(self):
         page = self.open('webinar-speakers', 390, 844)
         self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), 391)

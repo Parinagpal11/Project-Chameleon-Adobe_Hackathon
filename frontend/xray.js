@@ -270,6 +270,69 @@
     }));
   }
 
+  // ---------------------------------------------------------------- resize view
+  S.view = 'understand';
+  function setView(v) {
+    S.view = v;
+    $('tab-understand').setAttribute('aria-selected', String(v === 'understand'));
+    $('tab-resize').setAttribute('aria-selected', String(v === 'resize'));
+    $('xr-main').hidden = v !== 'understand';
+    $('xr-resize').hidden = v !== 'resize';
+    if (v === 'resize') runAdapt(); else fit();
+  }
+  function fitScale(w, h, box = 260, boxH = 220) { return Math.min(box / w, boxH / h); }
+  async function runAdapt() {
+    if (!S.design) return;
+    const ticket = (S.rzTicket = (S.rzTicket || 0) + 1);
+    $('rz-list').replaceChildren(el('p', { class: 'xr-hint', text: 'Laying out every size…' }));
+    let res;
+    try { res = await api('/adapt', { design: S.design }); } catch (e) { showError(e.message); return; }
+    if (ticket !== S.rzTicket) return;
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const src = Object.fromEntries(S.design.nodes.filter(n => n.src).map(n => [n.id, n.src]));
+    const d0 = S.design, W0 = d0.page.width, H0 = d0.page.height;
+    $('rz-title').textContent = `Resize · ${d0.name || 'design'}`;
+    let ok = 0, keptAll = 0, nKept = 0, cropCut = 0, stretched = 0;
+    const rows = res.results.map(r => {
+      for (const n of r.design.nodes) if (n.srcFrom && src[n.srcFrom]) n.src = src[n.srcFrom];
+      const c = r.checks, b = r.baselines;
+      if (c.ok) ok++;
+      if (c.subject_kept != null) { keptAll += c.subject_kept; nKept++; }
+      if (b.crop.cut.length) cropCut++;
+      if (b.stretch.distortion > 1.15) stretched++;
+      const sc = fitScale(r.width, r.height);
+      const mk = (draw) => { const cv = el('canvas', { role: 'img' }); draw(cv); return cv; };
+      const stretch = mk(cv => { cv.setAttribute('aria-label', `Stretched to ${r.width} by ${r.height}`);
+        GR.draw(cv, d0, { scale: sc, view: { width: r.width, height: r.height, sx: r.width / W0, sy: r.height / H0 } }); });
+      const crop = mk(cv => { cv.setAttribute('aria-label', `Centre-cropped to ${r.width} by ${r.height}`);
+        GR.draw(cv, d0, { scale: sc, view: { width: r.width, height: r.height, sx: b.crop.scale, sy: b.crop.scale, ox: b.crop.offset[0], oy: b.crop.offset[1] } }); });
+      const cham = mk(cv => { cv.setAttribute('aria-label', `Chameleon layout at ${r.width} by ${r.height}`); GR.draw(cv, r.design, { scale: sc }); });
+      const tag = (text, kind) => el('span', { class: 'rz-tag' + (kind ? ' ' + kind : ''), text });
+      const col = (title, canvas, tags, win) => el('div', { class: 'rz-col' + (win ? ' win' : '') },
+        el('h3', { text: title }), el('div', { class: 'rz-cell' }, canvas), el('div', { class: 'rz-tags' }, ...tags));
+      const chamTags = [
+        tag(c.overlaps.length ? `${c.overlaps.length} overlap${c.overlaps.length > 1 ? 's' : ''}` : 'No overlaps', c.overlaps.length ? 'bad' : 'good'),
+        tag(c.off_canvas.length ? `${c.off_canvas.length} off canvas` : 'All inside', c.off_canvas.length ? 'bad' : 'good'),
+        tag(c.small_text.length ? `${c.small_text.length} text under 12px` : 'Text ≥ 12px', c.small_text.length ? 'bad' : 'good'),
+      ];
+      if (c.subject_kept != null) chamTags.push(tag(`Subject ${Math.round(c.subject_kept * 100)}% kept`, c.subject_kept >= .95 ? 'good' : ''));
+      const stretchTags = [tag(b.stretch.distortion > 1.02 ? `Distorted ${b.stretch.distortion.toFixed(2)}×` : 'No distortion', b.stretch.distortion > 1.15 ? 'bad' : '')];
+      const cropTags = [tag(b.crop.cut.length ? `${b.crop.cut.length} element${b.crop.cut.length > 1 ? 's' : ''} cut off` : 'Nothing cut off', b.crop.cut.length ? 'bad' : '')];
+      if (b.crop.subject_kept != null) cropTags.push(tag(`Subject ${Math.round(b.crop.subject_kept * 100)}% kept`, b.crop.subject_kept < .95 ? 'bad' : ''));
+      return el('article', { class: 'rz-row', 'aria-label': `${r.name || ''} ${r.width} by ${r.height}` },
+        el('div', { class: 'rz-row-head' }, el('b', { text: r.name || `${r.width}×${r.height}` }),
+          el('span', { class: 'dim', text: `${r.width}×${r.height}` }),
+          el('span', { class: `xr-badge t${r.tier}`, text: `Tier ${r.tier} · ${r.tier_name}` })),
+        el('div', { class: 'rz-cols' }, col('Stretch', stretch, stretchTags), col('Centre crop', crop, cropTags), col('Chameleon', cham, chamTags, true)),
+        el('ul', { class: 'rz-why' }, ...r.reasons.map(x => el('li', { text: x }))));
+    });
+    const stat = (n, label) => el('div', { class: 'rz-stat' }, el('b', { text: n }), el('small', { text: label }));
+    $('rz-score').replaceChildren(stat(`${ok}/${res.results.length}`, 'sizes pass every check'),
+      stat(`${stretched}`, 'sizes distorted by stretching'), stat(`${cropCut}`, 'sizes where cropping cuts content'),
+      ...(nKept ? [stat(`${Math.round(keptAll / nKept * 100)}%`, 'photo subject kept (avg)')] : []));
+    $('rz-list').replaceChildren(...rows);
+  }
+
   // ---------------------------------------------------------------- data flow
   async function show(design) {
     const ticket = (S.ticket = (S.ticket || 0) + 1);
@@ -283,6 +346,7 @@
       S.design = design; S.analysis = analysis; S.hot = null;
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       renderPanel(); fit();
+      if (S.view === 'resize') runAdapt();
       return true;
     } catch (e) { if (ticket === S.ticket) showError(e.message); return false; }
   }
@@ -343,6 +407,11 @@
   function boot() {
     $('xr-file-icon').replaceChildren(Icon('upload')); $('xr-home-icon').replaceChildren(Icon('home'));
     $('xr-photo-icon').replaceChildren(Icon('image'));
+    $('tab-understand').onclick = () => setView('understand');
+    $('tab-resize').onclick = () => setView('resize');
+    for (const id of ['tab-understand', 'tab-resize']) $(id).addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const o = id === 'tab-understand' ? 'tab-resize' : 'tab-understand'; $(o).focus(); $(o).click(); }
+    });
     $('xr-photo').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; usePhoto(f); });
     const stage = document.querySelector('.xr-stage');
     let depth = 0;
@@ -398,5 +467,5 @@
     }).catch(e => showError(e.message));
   }
   boot();
-  window.XR = { S, show, pick };
+  window.XR = { S, show, pick, setView, runAdapt };
 })();

@@ -22,14 +22,14 @@ Team: **Pari Nagpal**, **Priyanshu**, **Anwar** (Iowa State University).
 
 ## Week 2 — Oct 13–19: adapt + first end-to-end
 - [x] Plan stage: tier from aspect-ratio change (A) — `engine/plan.py`
-- [ ] Solve stage: constraint layout with kiwisolver, several candidates (A)
-- [ ] Tier strategies: scale/re-wrap (1), re-flow groups (2), rebuild by importance (3) (A)
-- [ ] Subject-aware crop + background extend (B)
-- [ ] Score: faithfulness, legibility, balance, overlap, off-canvas (B)
-- [ ] `POST /adapt` and `POST /analyze` (A) — `/analyze` done
-- [ ] Judge mode: bring design → pick sizes → Stretch | Crop | Chameleon (C)
+- [x] Solve stage: deterministic block layout with fitting (no kiwisolver needed so far; several candidates still open) (A) — `engine/adapt.py`
+- [x] Tier strategies: keep layout + re-wrap (1), re-flow groups (2), rebuild by importance (3) (A)
+- [ ] Subject-aware crop + background extend (B) — crop done; extend open
+- [ ] Score: faithfulness, legibility, balance, overlap, off-canvas (B) — overlap, off-canvas, 12 px text, subject kept done
+- [x] `POST /adapt` and `POST /analyze` (A)
+- [ ] Judge mode: bring design → pick sizes → Stretch | Crop | Chameleon (C) — first version in the X-ray Resize tab
 - [ ] Test set at 24 designs (C)
-- [ ] **Milestone Oct 19:** every test design adapts to all 8 sizes end to end
+- [x] **Milestone Oct 19:** every test design adapts to all 8 sizes end to end (96/96 pass the checks)
 
 ## Week 3 — Oct 20–26: prove it
 - [ ] Evaluation runner: 36 designs × 8 sizes vs stretch/letterbox/crop → HTML report (B)

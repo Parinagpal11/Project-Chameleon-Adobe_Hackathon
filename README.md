@@ -2,7 +2,7 @@
 
 **Adobe University Hackathon 2026 · Iowa State University · Pari Nagpal, Priyanshu, Anwar.** Chameleon takes an existing design and reshapes it for a new canvas size so it still looks intentionally designed: not stretched, not badly cropped. Fix one size once and every other size follows.
 
-> **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). Engine v2 has started. The **Understand** stage reads groups, roles, grid, anchors, reading order and photo subjects, and you can see it at **http://127.0.0.1:8000/xray** (details in [docs/ENGINE.md](docs/ENGINE.md)). Solve and Score come next, following [docs/STRATEGY.md](docs/STRATEGY.md). Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
+> **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). Engine v2 has started. The **Understand** stage reads groups, roles, grid, anchors, reading order and photo subjects, and you can see it at **http://127.0.0.1:8000/xray** (details in [docs/ENGINE.md](docs/ENGINE.md)). The **Solve** stage (`POST /adapt`) now lays every design out at new sizes; open the X-ray's **Resize** tab to compare Stretch, Centre crop and Chameleon. Score comes next, following [docs/STRATEGY.md](docs/STRATEGY.md). Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
 
 ## Repository map
 
@@ -85,7 +85,7 @@ Rules are keyed by semantic **role** (headline, offer, CTA, logo, image, legal�
 - `backend/local_server.py`: the default HTTP server. `backend/main.py` is an optional FastAPI adapter that hasn't been integration-tested.
 - `frontend/`: `index.html`, `app.css` (light/dark tokens), `tour.css`, `silk.js` (animated ribbon behind the home screen), `icons.js` (SVG icons), `core.js` (state, sync, rules, history, projects, export), `canvas.js` (pan/zoom/select/drag), `panels.js` (layers, assets, inspector, rules), `dnd.js` (drag & drop), `tour.js` (animated tour and guides), `home.js`, `render.js`, `zip.js`.
 
-Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
+Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `POST /adapt` (design + sizes → adapted designs, reasons, checks, stretch/crop baselines) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
 
 Studio API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn` · `/parse-rule` · `GET|POST|DELETE /rules` · `PATCH|DELETE /rules/{id}` · `GET /projects` · `GET|PUT|DELETE /project?campaign=` · `GET /templates` · `GET /example?name=` · `GET /benchmark`
 

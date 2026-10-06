@@ -1,6 +1,6 @@
 # Engine v2 — design graph and the Understand stage
 
-The new engine works in five stages: **Understand → Plan → Solve → Score → Explain**. This file covers what exists now: the input format, the Understand stage, Plan tiers, the test set and the X-ray view. Solve and Score come in week 2. See [STRATEGY.md](STRATEGY.md) §4 for the reasoning.
+The new engine works in five stages: **Understand → Plan → Solve → Score → Explain**. This file covers what exists now: the input format, the Understand stage, Plan tiers, the Solve stage (`/adapt`), the test set and the X-ray view. Score comes next. See [STRATEGY.md](STRATEGY.md) §4 for the reasoning.
 
 ## 1. Input format: `chameleon-graph/1`
 
@@ -63,6 +63,20 @@ The studio's older ad JSON (`canvas` + `elements`) is still accepted. `engine/gr
 | 2 New orientation | Portrait ↔ landscape, a change of up to 4×, or the same shape at under 35% of the size | Keep groups intact and re-flow them along the new axis |
 | 3 Extreme | Change > 4×, or the short side ≤ 160 px | Rebuild by importance: essentials only, one row or column, protect text size |
 
+## 3b. Solve: what `adapt()` does
+
+`POST /adapt` with `{"design": {...}, "targets": [...]}` (targets optional, default the 8 evaluation sizes). Each result has the adapted `design` (same node ids; photos come back as `srcFrom` instead of repeating the image), `tier`, plain-English `reasons`, `checks` and `baselines`. All 12 test designs × 8 sizes pass the checks; a design adapts to all 8 sizes in about 10 ms.
+
+| Tier | What Solve does |
+|---|---|
+| 1 | **Keep the layout.** Every group stays anchored to the edges it hugs (left/right/centre, top/bottom). Text re-wraps in its own lane, type scales by the geometric mean of the two axes, photos re-crop around their subject, and a longer headline pushes what sits under it down. The original size returns the design unchanged. If that can't be done cleanly (overlap, off canvas, text under 12 px), it falls back to tier 2. |
+| 2 | **Re-flow by blocks.** Photo and copy go side by side on wide canvases and stacked on tall ones (a product cut-out keeps roughly its own shape, and the photo column narrows until the subject fits whole). Without a photo, cards go beside the copy on wide canvases. Type starts from the area ratio, then shrinks to fit. |
+| 3 | **Rebuild by importance.** One row on banners (the logo joins the row), one column on skyscrapers, photo as a subject-shaped thumbnail. Shrink type down to 12 px, then drop pieces in this order: decoration, legal, caption, body, item, price, eyebrow, badge, cards, subhead, offer. Headline and button are never dropped. Every drop is listed in `reasons`. |
+
+Building blocks: text stacks re-wrap; buttons re-size around their label; a group of several buttons (store badges) sits in a row or stacks; cards in a series (a `repeat` block) move together as a row, a grid or a column and never get text under 12 px; text rows (menu item … price) re-lay out instead of shrinking; a text logo is sized to its words. Full-bleed photos stay full-bleed with copy placed away from the subject; when the canvas is too extreme to keep the subject behind the copy, the photo becomes a side or top panel.
+
+`checks`: `overlaps` (except ones the designer made on purpose), `off_canvas`, `small_text` (< 12 px), `dropped`, `subject_kept`, `ok`. `baselines`: what plain stretching (distortion), centre crop (elements cut, subject kept) and letterboxing (empty share) would do at the same size.
+
 ## 4. Test set
 
 `examples/testset/` holds 12 seed designs in this format (simple / medium / hard: centred promo, photo split, full-bleed overlay, poster with speaker cards, sale banner, quote card, product grid, webinar, story, dense menu, asymmetric big type, app download). `tools/make_seed_testset.py` regenerates them.
@@ -76,4 +90,4 @@ The studio's older ad JSON (`canvas` + `elements`) is still accepted. `engine/gr
 
 ## 5. X-ray view
 
-Open http://127.0.0.1:8000/xray. Pick a design, or import your own JSON, to see the groups, roles, alignment lines, margins, anchors, reading order, photo subjects and background or decoration layers drawn on the design. The side panel lists the findings, the groups (hover to locate them) and the tier for each of the 8 target sizes.
+Open http://127.0.0.1:8000/xray. Pick a design, or import your own JSON, to see the groups, roles, alignment lines, margins, anchors, reading order, photo subjects and background or decoration layers drawn on the design. The side panel lists the findings, the groups (hover to locate them) and the tier for each of the 8 target sizes. The **Resize** tab shows every size three ways (Stretch, Centre crop, Chameleon) with the checks and the reasons.

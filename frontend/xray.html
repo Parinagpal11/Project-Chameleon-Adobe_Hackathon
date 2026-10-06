@@ -19,6 +19,10 @@
 <a class="skip" href="#xr-panel">Skip to findings</a>
 <header class="xr-top">
   <div class="xr-brand"><span class="xr-mark" aria-hidden="true"></span><strong>Chameleon</strong><span class="xr-sub">X-ray</span></div>
+  <div class="xr-tabs" role="tablist" aria-label="View">
+    <button role="tab" id="tab-understand" aria-selected="true" aria-controls="xr-main">Understand</button>
+    <button role="tab" id="tab-resize" aria-selected="false" aria-controls="xr-resize">Resize</button>
+  </div>
   <label class="xr-pick">
     <span class="visually-hidden">Design</span>
     <select id="xr-design" aria-label="Design to analyse"></select>
@@ -36,7 +40,7 @@
   <button class="xr-btn ghost icon" id="xr-theme" aria-label="Toggle light or dark theme"></button>
 </header>
 
-<main class="xr-main">
+<main class="xr-main" id="xr-main">
   <section class="xr-stage" aria-label="Design with analysis overlay">
     <div class="xr-meta" id="xr-meta" aria-live="polite"></div>
     <div class="xr-drop" id="xr-drop" hidden>Drop the photo to use it in this design</div>
@@ -66,6 +70,16 @@
     </section>
   </aside>
 </main>
+<section class="xr-resize" id="xr-resize" role="tabpanel" aria-labelledby="tab-resize" hidden>
+  <header class="rz-head">
+    <div>
+      <h2 id="rz-title">Resize</h2>
+      <p class="xr-hint" id="rz-sub">Every size, three ways: plain stretch, centre crop, and Chameleon.</p>
+    </div>
+    <div class="rz-score" id="rz-score" aria-live="polite"></div>
+  </header>
+  <div class="rz-list" id="rz-list"></div>
+</section>
 <div class="xr-error" id="xr-error" role="alert" hidden></div>
 
 <script src="/assets/icons.js"></script>

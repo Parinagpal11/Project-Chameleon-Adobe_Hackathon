@@ -76,15 +76,18 @@
       }
     } else {   // placeholder photo: soft gradient, horizon and a label
       const base = s.fill || '#8a8f99';
-      const g = ctx.createLinearGradient(x, y, x + w, y + h);
+      // with a crop, the placeholder "photo" is larger than the slot: draw it at its virtual size and offset
+      let vx = x, vy = y, vw = w, vh = h;
+      if (n.crop) { const [cx0, cy0, cw0, ch0] = n.crop; vw = w / cw0; vh = h / ch0; vx = x - cx0 * vw; vy = y - cy0 * vh; }
+      const g = ctx.createLinearGradient(vx, vy, vx + vw, vy + vh);
       g.addColorStop(0, shade(base, .12)); g.addColorStop(1, shade(base, -.12));
       ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
       if (n.subject) {   // a soft blob where the subject is, so crops visibly keep or lose it
-        const [sx, sy, sw, sh] = n.subject;
-        const cx = x + (sx + sw / 2) * w, cy = y + (sy + sh / 2) * h, r = Math.max(sw * w, sh * h) / 2;
+        const [sx, sy, sw0, sh0] = n.subject, sw = sw0, sh = sh0;
+        const cx = vx + (sx + sw / 2) * vw, cy = vy + (sy + sh / 2) * vh, r = Math.max(sw * vw, sh * vh) / 2;
         const rg = ctx.createRadialGradient(cx, cy, r * .1, cx, cy, r);
         rg.addColorStop(0, shade(base, .32)); rg.addColorStop(1, shade(base, .02) + '00');
-        ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(cx, cy, sw * w / 2, sh * h / 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(cx, cy, sw * vw / 2, sh * vh / 2, 0, 0, Math.PI * 2); ctx.fill();
       }
       const label = (n.meta && n.meta.label) || n.role || 'image';
       const fs = Math.max(10, Math.min(w, h) * .09);
@@ -109,14 +112,22 @@
     ctx.restore();
   }
 
+  // opts.view = { width, height, sx, sy, ox, oy }: draw the design into another canvas size with a plain
+  // transform (used to show what naive stretching / centre-cropping would do)
   function draw(canvas, design, opts = {}) {
-    const W = design.page.width, H = design.page.height;
+    const v = opts.view;
+    const W = v ? v.width : design.page.width, H = v ? v.height : design.page.height;
     const scale = opts.scale || 1, dpr = opts.dpr || window.devicePixelRatio || 1;
     canvas.width = Math.round(W * scale * dpr); canvas.height = Math.round(H * scale * dpr);
     canvas.style.width = W * scale + 'px'; canvas.style.height = H * scale + 'px';
     const ctx = canvas.getContext('2d');
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
-    ctx.fillStyle = design.page.background || '#fff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = opts.matte || design.page.background || '#fff'; ctx.fillRect(0, 0, W, H);
+    if (v) {
+      ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      ctx.transform(v.sx, 0, 0, v.sy, v.ox || 0, v.oy || 0);
+      ctx.fillStyle = design.page.background || '#fff'; ctx.fillRect(0, 0, design.page.width, design.page.height);
+    }
     const redraw = () => draw(canvas, design, opts);
     const nodes = design.nodes.filter(n => n.type !== 'group' && !n.hidden)
       .map((n, i) => ({ n, z: n.z != null ? n.z : i })).sort((a, b) => a.z - b.z).map(o => o.n);

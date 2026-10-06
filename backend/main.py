@@ -56,6 +56,8 @@ def save(req: ProjectSave, campaign: str): return run(service.save_project, camp
 def drop(campaign: str): return run(service.delete_project, campaign)
 @app.post('/analyze')
 def analyze(data: dict): return run(service.analyze_request, data)
+@app.post('/adapt')
+def adapt(data: dict): return run(service.adapt_request, data)
 @app.get('/testset')
 def testset():
     from engine.plan import EVAL_SIZES
