@@ -1,6 +1,6 @@
 # Project Chameleon — resize a design without breaking it
 
-**Adobe University Hackathon 2026 · Iowa State University team.** Chameleon takes an existing design and reshapes it for a new canvas size so it still looks intentionally designed: not stretched, not badly cropped. Fix one size once and every other size follows.
+**Adobe University Hackathon 2026 · Iowa State University · Pari Nagpal, Priyanshu, Anwar.** Chameleon takes an existing design and reshapes it for a new canvas size so it still looks intentionally designed: not stretched, not badly cropped. Fix one size once and every other size follows.
 
 > **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). The design-preserving engine described in [docs/STRATEGY.md](docs/STRATEGY.md) is being built now. Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
 

@@ -2,7 +2,13 @@
 
 Full reasoning lives in [STRATEGY.md](STRATEGY.md). Rule of thumb: **engine first, proof second, polish last.** A working end-to-end version must exist by **Oct 19**.
 
-Roles: **A** engine lead · **B** vision & quality · **C** product & demo (merge B+C for a 2-person team).
+Team: **Pari Nagpal**, **Priyanshu**, **Anwar** (Iowa State University).
+
+| Role | Owns | Person |
+|---|---|---|
+| A: engine lead | Design graph, Understand stage, solver, tier strategies | _to confirm_ |
+| B: vision & quality | Photo subject crop, font metrics, scoring, evaluation report, test set | _to confirm_ |
+| C: product & demo | Judge mode, X-ray view, hosting, README, video, pitch | _to confirm_ |
 
 ## Week 1 — Oct 6–12: understand the design
 - [ ] Read the official Hub brief; adapt the input format and tier definitions (all)
