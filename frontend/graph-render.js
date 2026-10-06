@@ -66,9 +66,14 @@
     roundRect(ctx, x, y, w, h, s.radius); ctx.clip();
     const im = n.src ? loadImage(n.src, redraw) : null;
     if (im && im.complete && im.naturalWidth) {
-      const k = Math.max(w / im.naturalWidth, h / im.naturalHeight);
-      const dw = im.naturalWidth * k, dh = im.naturalHeight * k;
-      ctx.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      if (n.crop) {   // subject-aware crop chosen by the engine (image-relative x, y, w, h)
+        const [cx, cy, cw, ch] = n.crop, iw = im.naturalWidth, ih = im.naturalHeight;
+        ctx.drawImage(im, cx * iw, cy * ih, cw * iw, ch * ih, x, y, w, h);
+      } else {
+        const k = Math.max(w / im.naturalWidth, h / im.naturalHeight);
+        const dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+        ctx.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      }
     } else {   // placeholder photo: soft gradient, horizon and a label
       const base = s.fill || '#8a8f99';
       const g = ctx.createLinearGradient(x, y, x + w, y + h);

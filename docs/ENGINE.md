@@ -28,6 +28,7 @@ The new engine works in five stages: **Understand → Plan → Solve → Score �
 | `z` | Optional paint order. The default is list order: later nodes are drawn on top. |
 | `role` | Optional. Set it when you know it (`logo`, `headline`, `cta`, `legal`, `background`, `decoration`…). Given roles always win over inferred ones. |
 | `subject` | Optional, images only: the region that must survive a crop, as image-relative `[x, y, w, h]` in 0–1 units. |
+| `subjects[id].crop`, `kept`, `aspect`, `parts` | Subject-aware crop for photos whose subject was detected: the image-relative window `[x, y, w, h]` shown in the slot, and the share of the subject(s) it keeps. `parts` lists separate subjects (each face); if they can't all fit, the crop keeps the most of them rather than the gap between. Designer-given subjects get no crop (the photo keeps its default cover fit). | `subject.smart_crop` |
 | `style` | Text: `fontSize`, `fontWeight`, `fontFamily`, `color`, `align`, `lineHeight`, `letterSpacing`. Shapes: `fill`, `radius`, `stroke`, `opacity`. |
 | `meta` | Free-form, for example `label` for placeholder photos. |
 

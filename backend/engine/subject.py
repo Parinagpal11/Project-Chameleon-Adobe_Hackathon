@@ -97,13 +97,15 @@ def _faces(img):
     if len(found) == 0:
         return None
     W, H = img.size
-    x0 = min(f[0] for f in found); y0 = min(f[1] for f in found)
-    x1 = max(f[0] + f[2] for f in found); y1 = max(f[1] + f[3] for f in found)
-    # faces sit in the top of a person: extend down and sideways a little
-    fw, fh = x1 - x0, y1 - y0
-    x0, x1 = max(0, x0 - fw * .35), min(W, x1 + fw * .35)
-    y0, y1 = max(0, y0 - fh * .3), min(H, y1 + fh * 1.2)
-    return [float(x0 / W), float(y0 / H), float((x1 - x0) / W), float((y1 - y0) / H)]
+    # each face sits at the top of a person: extend every face on its own (down and a little sideways),
+    # then take the union, so two people far apart don't swallow the whole photo
+    boxes = []
+    for fx, fy, fw, fh in found:
+        boxes.append((max(0, fx - fw * .25), max(0, fy - fh * .25), min(W, fx + fw * 1.25), min(H, fy + fh * 2.0)))   # head + shoulders
+    parts = [[float(b[0] / W), float(b[1] / H), float((b[2] - b[0]) / W), float((b[3] - b[1]) / H)] for b in boxes]
+    x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
+    x1 = max(b[2] for b in boxes); y1 = max(b[3] for b in boxes)
+    return [float(x0 / W), float(y0 / H), float((x1 - x0) / W), float((y1 - y0) / H)], parts
 
 
 def _rgb_to_lab(rgb):
@@ -164,9 +166,11 @@ def saliency_map(img, size: int = 96):
     palette = np.unique(np.round(border / 6) * 6, axis=0)
     if len(palette) > 256:
         palette = palette[np.linspace(0, len(palette) - 1, 256).astype(int)]
-    px = lab_b.reshape(-1, 1, 3)
-    d = np.sqrt(((px - palette.reshape(1, -1, 3)) ** 2).sum(-1))
-    ft = np.sort(d, axis=1)[:, :3].mean(1).reshape(h, w) if d.shape[1] >= 3 else d.min(1).reshape(h, w)
+    px = lab_b.reshape(-1, 3)
+    # squared distances via |p|^2 + |q|^2 - 2 p.q (one matrix multiply instead of a big broadcast)
+    d = np.maximum((px ** 2).sum(1)[:, None] + (palette ** 2).sum(1)[None, :] - 2 * px @ palette.T, 0)
+    k = min(3, d.shape[1])
+    ft = np.sqrt(np.partition(d, k - 1, axis=1)[:, :k]).mean(1).reshape(h, w)
 
     grey = np.asarray(small.convert('L'), dtype=float) / 255.0
     f = np.fft.fft2(grey)
@@ -258,7 +262,11 @@ def box_from_map(grid, w, h):
     inside = sum(grid[y][x] for y in range(y0, y1 + 1) for x in range(x0, x1 + 1))
     area = (x1 - x0 + 1) * (y1 - y0 + 1) / (w * h)
     concentration = (inside / total) / max(area, .02)   # 1 = no better than random, higher = focused
-    conf = max(0.0, min(1.0, (concentration - 1) / 3))
+    n_in = (x1 - x0 + 1) * (y1 - y0 + 1)
+    mean_in = inside / n_in
+    mean_out = (total - inside) / max(1, w * h - n_in)
+    separation = mean_in / (mean_out + 1e-6)              # big subjects: inside clearly brighter than outside
+    conf = max(0.0, min(1.0, max((concentration - 1) / 3, (separation - 2) / 6 if area > .25 else 0.0)))
     return [x0 / w, y0 / h, (x1 - x0 + 1) / w, (y1 - y0 + 1) / h], round(conf, 3)
 
 
@@ -281,11 +289,71 @@ def _detect(src: str) -> dict:
     img = _open(src)
     if img is None:
         return {'box': CENTRE, 'source': 'assumed', 'confidence': 0.0}
+    aspect = round(img.size[0] / img.size[1], 4)
     face = _faces(img)
     if face:
-        return {'box': [round(v, 4) for v in face], 'source': 'faces', 'confidence': 0.9}
-    grid, w, h = saliency_map(img)
-    box, conf = box_from_map(grid, w, h)
+        box, parts = face
+        return {'box': [round(v, 4) for v in box], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect,
+                'parts': [[round(v, 4) for v in p] for p in parts]}
+    # two scales: the coarse map keeps big subjects whole, the fine one finds small ones
+    # (a runner on a wide road is ~1 px at 96 px). Keep whichever is more confident.
+    found = []
+    for size in (96, 160):
+        grid, w, h = saliency_map(img, size)
+        found.append(box_from_map(grid, w, h))
+    (b1, c1), (b2, c2) = found
+    if _iou(b1, b2) >= .4:      # both scales see the same thing: union keeps every part of it
+        x0, y0 = min(b1[0], b2[0]), min(b1[1], b2[1])
+        x1, y1 = max(b1[0] + b1[2], b2[0] + b2[2]), max(b1[1] + b1[3], b2[1] + b2[3])
+        box, conf = [x0, y0, x1 - x0, y1 - y0], max(c1, c2)
+    else:                        # they disagree: trust the more confident one
+        box, conf = (b2, c2) if c2 > c1 + .05 else (b1, c1)
+    bx, by, bw, bh = box
+    if (bh > .95 and bw < .15) or (bw > .95 and bh < .15):
+        conf = 0.0   # a thin strip along a whole edge is a gradient or a border, not a subject
     if conf < .1:   # nothing clearly stands out: keep the centre rather than a random patch
-        return {'box': CENTRE, 'source': 'assumed', 'confidence': conf}
-    return {'box': [round(v, 4) for v in box], 'source': 'saliency', 'confidence': conf}
+        return {'box': CENTRE, 'source': 'assumed', 'confidence': conf, 'aspect': aspect}
+    return {'box': [round(v, 4) for v in box], 'source': 'saliency', 'confidence': conf, 'aspect': aspect}
+
+
+def _iou(a, b) -> float:
+    ix = max(0.0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])) * max(0.0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+    u = a[2] * a[3] + b[2] * b[3] - ix
+    return ix / u if u > 0 else 0.0
+
+
+def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: list | None = None) -> dict:
+    """The part of the photo to show in a slot of another shape: as large as possible (cover fit),
+    slid along the free axis to keep as much of the subject as it can, never past the photo's edges.
+
+    `parts` are separate subjects (e.g. each person's face). If they don't all fit, the window keeps
+    the most of them it can (by area) instead of centring on the empty space between them.
+    Returns image-relative `crop` [x, y, w, h] and `kept`, the share of the subject(s) inside it."""
+    parts = parts or [subject]
+    wide = image_aspect > slot_aspect
+    if wide:
+        cw, ch = slot_aspect / image_aspect, 1.0
+    else:
+        cw, ch = 1.0, image_aspect / slot_aspect
+    size = cw if wide else ch
+    def covered(pos):
+        cx, cy = (pos, 0.0) if wide else (0.0, pos)
+        tot = got = 0.0
+        for px, py, pw, ph in parts:
+            a = pw * ph
+            ix = max(0.0, min(px + pw, cx + cw) - max(px, cx)) * max(0.0, min(py + ph, cy + ch) - max(py, cy))
+            tot += a; got += ix
+        return got / tot if tot > 0 else 1.0
+    sx, sy, sw, sh = subject
+    centre = (sx + sw / 2 if wide else sy + sh / 2) - size / 2
+    best = min(max(centre, 0.0), 1.0 - size)
+    best_kept = covered(best)
+    if best_kept < .999:          # not everything fits: search positions for the one that keeps the most
+        steps = 60
+        for i in range(steps + 1):
+            pos = (1.0 - size) * i / steps
+            k = covered(pos)
+            if k > best_kept + 1e-6 or (abs(k - best_kept) <= 1e-6 and abs(pos - centre) < abs(best - centre)):
+                best, best_kept = pos, k
+    cx, cy = (best, 0.0) if wide else (0.0, best)
+    return {'crop': [round(cx, 4), round(cy, 4), round(cw, 4), round(ch, 4)], 'kept': round(best_kept, 3)}

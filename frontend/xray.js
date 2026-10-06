@@ -196,7 +196,7 @@
       el('span', { class: 'xr-pill', text: `${a.grid.alignment} aligned` }),
       meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null,
       S.mine && a.subjects[S.mine] ? el('span', { class: 'xr-pill mine', role: 'status',
-        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}%` }) : null].filter(Boolean));
+        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
     $('xr-notes').replaceChildren(...a.notes.map(n => el('li', { text: n })));
     $('xr-gcount').textContent = a.groups.length;
     const orderPos = Object.fromEntries(a.reading_order.map((id, i) => [id, i + 1]));
@@ -227,6 +227,10 @@
     try {
       const analysis = await api('/analyze', { design });
       if (ticket !== S.ticket) return false;   // a newer design was picked meanwhile
+      for (const [id, s] of Object.entries(analysis.subjects || {})) {   // draw photos with the engine's crop
+        const node = design.nodes.find(n => n.id === id);
+        if (node && node.src && s.crop) node.crop = s.crop;
+      }
       S.design = design; S.analysis = analysis; S.hot = null;
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       renderPanel(); fit();
@@ -245,14 +249,12 @@
     const rank = n => ({ background: 3, hero: 2 }[a?.roles[n.id]?.role] || 1) * 1e9 + n.box[2] * n.box[3];
     return imgs.sort((p, q) => rank(q) - rank(p))[0] || null;
   }
-  function fileToCroppedDataURL(file, aspect, maxSide = 1600) {
-    // crop to the slot's shape first, so the subject box (image-relative) lines up with the slot on the page
+  function fileToDataURL(file, maxSide = 1600) {
+    // send the WHOLE photo: the engine finds the subject first, then chooses the crop around it
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file), im = new Image();
       im.onload = () => {
-        let sw = im.naturalWidth, sh = im.naturalHeight;
-        if (sw / sh > aspect) sw = sh * aspect; else sh = sw / aspect;
-        const sx = (im.naturalWidth - sw) / 2, sy = (im.naturalHeight - sh) / 2;
+        const sw = im.naturalWidth, sh = im.naturalHeight, sx = 0, sy = 0;
         const k = Math.min(1, maxSide / Math.max(sw, sh));
         const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
         c.getContext('2d').drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
@@ -270,7 +272,8 @@
     const target = photoTarget(d, S.analysis);
     if (!target) return showError('This design has no photo to replace. Pick one with a photo, e.g. “Travel overlay”.');
     try {
-      target.src = await fileToCroppedDataURL(file, target.box[2] / target.box[3]);
+      target.src = await fileToDataURL(file);
+      delete target.crop;
       delete target.subject;                 // make the engine find it
       target.meta = { ...(target.meta || {}), label: 'your photo' };
       S.mine = target.id;

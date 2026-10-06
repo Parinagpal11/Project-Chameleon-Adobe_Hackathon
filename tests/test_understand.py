@@ -386,6 +386,62 @@ class RealPhotoTests(unittest.TestCase):
         self.assertEqual(r['source'], 'saliency')
         self.assertTrue(self.covers(r['box'], (.17, .555, .83, .84), size, need=.95), r['box'])
 
+    def test_small_runner_in_wide_photo_is_found_and_kept(self):
+        r, size = self.detect('wide-runner-synthetic.jpg', False)
+        self.assertEqual(r['source'], 'saliency')
+        self.assertTrue(self.covers(r['box'], (414 / 1600, 560 / 900, 436 / 1600, 640 / 900), size), r['box'])
+        crop = subject.smart_crop(r['box'], 1600 / 900, 1080 / 1350)       # into a tall slot
+        self.assertEqual(crop['kept'], 1.0)
+        self.assertLess(crop['crop'][0], .2)                                # slid left, not centred
+
+    def test_two_people_far_apart_keep_one_whole(self):
+        try:
+            import cv2
+            from PIL import Image, ImageOps
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x / Pillow not installed')
+        w = Image.open(self.PHOTOS / 'portrait-woman.jpg').convert('RGB')
+        face = w.crop((int(w.width * .5), int(w.height * .15), int(w.width * .95), int(w.height * .7))).resize((260, 320))
+        bg = Image.new('RGB', (1600, 900), (225, 215, 200)); bg.paste(face, (60, 200)); bg.paste(ImageOps.mirror(face), (1280, 220))
+        buf = io.BytesIO(); bg.save(buf, 'JPEG', quality=88); subject._cache.clear()
+        r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
+        self.assertEqual((r['source'], len(r['parts'])), ('faces', 2))
+        c = subject.smart_crop(r['box'], r['aspect'], 1.0, r['parts'])
+        self.assertGreater(c['kept'], .45)                      # one person fully, not the empty gap
+        x = c['crop'][0]
+        whole = [p for p in r['parts'] if p[0] >= x - 1e-6 and p[0] + p[2] <= x + c['crop'][2] + 1e-6]
+        self.assertEqual(len(whole), 1)
+
+    def test_given_subject_gets_no_crop(self):
+        # a designer-marked subject is relative to the slot as shown: no crop decision, so the renderer
+        # keeps its cover fit instead of stretching the photo
+        d = design('split-photo-left')
+        p = next(n for n in d['nodes'] if n['id'] == 'photo')
+        buf = io.BytesIO()
+        from PIL import Image
+        Image.new('RGB', (400, 200), (120, 130, 140)).save(buf, 'JPEG')
+        p['src'] = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+        s = analyze(d)['subjects']['photo']
+        self.assertEqual(s['source'], 'given')
+        self.assertNotIn('crop', s)
+
+    def test_gradient_is_not_a_subject(self):
+        from PIL import Image, ImageDraw
+        g = Image.new('RGB', (1600, 900)); d = ImageDraw.Draw(g)
+        for x in range(1600): d.line([(x, 0), (x, 900)], fill=(int(40 + x / 1600 * 180),) * 3)
+        buf = io.BytesIO(); g.save(buf, 'JPEG', quality=88); subject._cache.clear()
+        self.assertEqual(subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())['source'], 'assumed')
+
+    def test_smart_crop_geometry(self):
+        c = subject.smart_crop([.8, .4, .1, .2], 2.0, 1.0)                  # wide photo, square slot
+        self.assertEqual(c['crop'][2:], [.5, 1.0]); self.assertEqual(c['crop'][0], .5)   # clamped at the right edge
+        self.assertEqual(c['kept'], 1.0)
+        c = subject.smart_crop([.4, .05, .2, .1], .5, 1.0)                  # tall photo, square slot
+        self.assertEqual(c['crop'][1], 0.0); self.assertEqual(c['crop'][3], .5)
+        c = subject.smart_crop([0, 0, 1, 1], 2.0, .5)                       # subject bigger than the window
+        self.assertLess(c['kept'], 1.0)
+
     def test_flat_background(self):
         for crop in (False, True):
             self.assertEqual(self.detect('flat-blue.jpg', crop)[0]['source'], 'assumed')

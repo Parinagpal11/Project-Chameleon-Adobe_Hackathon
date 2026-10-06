@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 
 from .graph import Box, Graph, Node, load
-from .subject import find_subject
+from .subject import find_subject, smart_crop
 
 ROLE_WEIGHT = {
     'headline': 1.0, 'hero': .95, 'cta': .9, 'offer': .85, 'logo': .8, 'subhead': .7, 'photo': .65,
@@ -621,8 +621,21 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
     for n in g.leaves():
         if n.type == 'image' and roles.get(n.id, {}).get('role') not in ('logo', 'decoration'):
             sub = find_subject(n)
+            slot = n.box.w / n.box.h if n.box.h else 1.0
+            if sub.get('aspect'):
+                # detected on the whole photo: choose the crop around the subject
+                sub.update(smart_crop(sub['box'], sub['aspect'], slot, sub.get('parts')))
+                cx, cy, cw, ch = sub['crop']
+            else:
+                # given by the designer (relative to the slot as shown) or photo not readable:
+                # no crop decision; the renderer keeps its default cover fit
+                cx, cy, cw, ch = 0.0, 0.0, 1.0, 1.0
             bx, by, bw, bh = sub['box']
-            sub['page_box'] = Box(n.box.x + bx * n.box.w, n.box.y + by * n.box.h, bw * n.box.w, bh * n.box.h).list()
+            # subject inside the shown crop, clipped to it, then onto the page
+            x0, y0 = max(0.0, (bx - cx) / cw), max(0.0, (by - cy) / ch)
+            x1, y1 = min(1.0, (bx + bw - cx) / cw), min(1.0, (by + bh - cy) / ch)
+            sub['page_box'] = Box(n.box.x + x0 * n.box.w, n.box.y + y0 * n.box.h,
+                                  max(0.0, x1 - x0) * n.box.w, max(0.0, y1 - y0) * n.box.h).list()
             subjects[n.id] = sub
     texts = sorted((n for n in g.leaves() if n.type == 'text'), key=lambda n: -n.font_size)
     result = {
