@@ -455,6 +455,62 @@ def _column(gr: dict, tall: list[dict], W: float) -> tuple[float, float]:
     return x0, x1
 
 
+def find_blocks(g: Graph, groups: list[dict], repeats: list[dict], dividers: list[Box]) -> list[dict]:
+    """Second level of the grouping hierarchy (designers group hierarchically: a headline stack and its
+    button form one "copy block"; repeated cards form one row). Groups are nested in exactly one block.
+
+    Cues, as in the layout-grouping literature: proximity, shared alignment edge, same column, and a
+    divider line or panel edge breaking a block. Logos, legal lines and photos stay blocks of their own
+    because they are anchored, not re-flowed with the copy."""
+    W, H = g.width, g.height
+    by_id = {gr['id']: gr for gr in groups}
+    blocks, used = [], set()
+    for r in repeats:
+        members = [i for i in r['groups'] if i in by_id]
+        if len(members) >= 2:
+            blocks.append({'kind': 'repeat', 'groups': members})
+            used.update(members)
+    alone = {'logo', 'legal', 'hero', 'background', 'decoration'}
+    def cornered(gr):   # pinned to a page corner (a date badge top-left): anchored, not part of the copy flow
+        a = set(gr.get('anchors', []))
+        return bool(a & {'top', 'bottom'}) and bool(a & {'left', 'right'}) and gr['role'] != 'headline' and gr['kind'] != 'button'
+    cand = [gr for gr in groups if gr['id'] not in used and gr['role'] not in alone
+            and gr['kind'] not in ('image', 'card') and not cornered(gr)]
+    dsu = _DSU(range(len(cand)))
+    tol = max(4.0, W * .01)
+    for i, a in enumerate(cand):
+        for j in range(i + 1, len(cand)):
+            b = cand[j]
+            A, B = a['box'], b['box']
+            if a.get('column') != b.get('column'):
+                continue
+            aligned = (abs(A.x - B.x) <= tol or abs(A.cx - B.cx) <= tol or abs(A.r - B.r) <= tol
+                       or _overlap_1d(A.x, A.r, B.x, B.r) >= .3 * min(A.w, B.w))
+            upper, lower = (A, B) if A.y <= B.y else (B, A)
+            gap = lower.y - upper.b
+            if aligned and -2 <= gap <= max(H * .08, 1.2 * min(A.h, B.h)) and not _divided(upper, lower, dividers):
+                dsu.union(i, j)
+    buckets: dict[int, list[dict]] = {}
+    for i, gr in enumerate(cand):
+        buckets.setdefault(dsu.find(i), []).append(gr)
+    for members in buckets.values():
+        if len(members) >= 2:
+            blocks.append({'kind': 'copy' if any(m['role'] == 'headline' for m in members) else 'stack',
+                           'groups': [m['id'] for m in sorted(members, key=lambda m: m['box'].y)]})
+            used.update(m['id'] for m in members)
+    for gr in groups:
+        if gr['id'] not in used:
+            blocks.append({'kind': 'single', 'groups': [gr['id']]})
+    order = {gid: i for i, gid in enumerate(gr['id'] for gr in sorted(groups, key=lambda x: (x['box'].y, x['box'].x)))}
+    blocks.sort(key=lambda bl: min(order[x] for x in bl['groups']))
+    for i, bl in enumerate(blocks):
+        bl['id'] = f'b{i + 1}'
+        bl['box'] = Box.bound(by_id[x]['box'] for x in bl['groups']).list()
+        for x in bl['groups']:
+            by_id[x]['block'] = bl['id']
+    return blocks
+
+
 def find_anchors(g: Graph, groups: list[dict], margins: dict) -> None:
     """Which edges each group follows. Groups beside a tall photo are anchored within their column."""
     W, H = g.width, g.height
@@ -598,7 +654,7 @@ def _notes(g, layers, roles, groups, grid, style, subjects) -> list[str]:
     for iid, sub in subjects.items():
         if sub['source'] != 'assumed':
             how = {'given': 'marked in the design', 'faces': 'found by face detection', 'people': 'found by person detection',
-                   'saliency': 'found by saliency'}[sub['source']]
+                   'objects': 'found by object detection', 'saliency': 'found by saliency'}[sub['source']]
             notes.append(f"Subject of photo “{iid}” {how}.")
     if layers['decoration']:
         notes.append(f"{len(layers['decoration'])} decorative element(s) can move or drop when space is tight.")
@@ -617,6 +673,9 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
     find_anchors(g, groups, grid['margins'])
     order = reading_order(groups)
     repeats = find_repeats(g, groups)
+    dividers = [g.by_id[d].box for d in layers['decoration'] if g.by_id[d].type == 'shape'
+                and g.by_id[d].box.h <= max(4.0, g.height * .01)]
+    blocks = find_blocks(g, groups, repeats, dividers)
     style = overall_style(g, layers, groups, roles, grid, repeats)
     subjects = {}
     for n in g.leaves():
@@ -651,11 +710,16 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
         'grid': grid,
         'reading_order': order,
         'repeats': repeats,
+        'blocks': blocks,
         'hierarchy': [n.id for n in texts],
         'subjects': subjects,
         'style': style,
     }
     result['notes'] = _notes(g, layers, roles, groups, grid, style, subjects)
+    for bl in blocks:
+        if bl['kind'] == 'copy':
+            roles_in = [next(gr for gr in groups if gr['id'] == x)['role'] for x in bl['groups']]
+            result['notes'].append(f"Copy block: {' + '.join(dict.fromkeys(roles_in))} move together.")
     for r in repeats:
         result['notes'].append(f"{len(r['groups'])} matching {r['kind']} groups repeat in a {r['axis']} (gap {r['gap']:.0f} px).")
     if targets:

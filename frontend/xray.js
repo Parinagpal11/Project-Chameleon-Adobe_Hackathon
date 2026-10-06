@@ -83,7 +83,7 @@
     const fs = 11 * k, padX = 7 * k, h = fs + 9 * k, dot = 6 * k;
     const w = text.length * fs * .56 + padX * 2 + dot + 5 * k;
     const ty = opts.below ? y : y - h;
-    const g = svg('g', { class: 'pill' }, parent);
+    const g = svg('g', { class: 'pill' + (opts.kind ? ' ' + opts.kind : '') }, parent);
     svg('rect', { x, y: ty, width: w, height: h, rx: h / 2 }, g);
     svg('circle', { cx: x + padX + dot / 2, cy: ty + h / 2, r: dot / 2 }, g);
     const t = svg('text', { x: x + padX + dot + 5 * k, y: ty + h / 2 + fs * .36, 'font-size': fs }, g);
@@ -129,11 +129,13 @@
       for (const [id, s] of Object.entries(a.subjects)) {
         const boxes = s.page_parts && s.page_parts.length ? s.page_parts : [s.page_box];
         const many = boxes.length > 1;
-        boxes.forEach((b, i) => frames.push({ b, text: s.source === 'faces' ? (many ? `Face ${i + 1}` : 'Face') : s.source === 'people' ? (many ? `Person ${i + 1}` : 'Person') : (s.source === 'assumed' ? 'Centre (no subject found)' : 'Subject'), dim: s.source === 'assumed' }));
+        boxes.forEach((b, i) => frames.push({ b, text: s.source === 'faces' ? (many ? `Face ${i + 1}` : 'Face') : s.source === 'people' ? (many ? `Person ${i + 1}` : 'Person') : (s.source === 'assumed' ? 'Centre (no subject found)' : (many ? `Subject ${i + 1}` : 'Subject')), dim: s.source === 'assumed' }));
       }
       // labels avoid the design's other elements (logo, text, buttons) and each other
       const photoIds = new Set(Object.keys(a.subjects));
-      const avoid = a.groups.filter(g => !g.members.some(m => photoIds.has(m))).map(g => g.box);
+      const r0 = 12 * k;
+      const avoid = a.groups.filter(g => !g.members.some(m => photoIds.has(m))).map(g => g.box)
+        .concat(a.groups.map(g => [g.box[0] - 2 * r0, g.box[1] - 2 * r0, 3 * r0, 3 * r0]));   // number badges
       const placed = [];
       const hits = (bx, by, bw, bh) => [...avoid, ...placed].some(([ax, ay, aw, ah]) => bx < ax + aw && bx + bw > ax && by < ay + ah && by + bh > ay);
       for (const { b: [x, y, w, h], text, dim } of frames) {
@@ -185,13 +187,20 @@
         }
       }
     }
+    const hotBlock = (a.blocks || []).find(b => b.id === S.hot);
+    if (hotBlock) {
+      const [x, y, w, h] = hotBlock.box, pad = 12 * k;
+      svg('rect', { x: x - pad, y: y - pad, width: w + pad * 2, height: h + pad * 2, rx: 10 * k, class: 'blk' }, o);
+      pill(o, x - pad, y - pad - 6 * k, ({ copy: 'Copy block', repeat: 'Repeated items', stack: 'Stack' })[hotBlock.kind], k, { kind: 'block' });
+    }
     if (S.on.order) {
       const byId = Object.fromEntries(a.groups.map((g, i) => [g.id, { g, i }]));
       const pts = a.reading_order.map(id => byId[id]).filter(Boolean);
       pts.forEach(({ g, i }, n) => {
-        const r = 11 * k, cx = g.box[0] + r * .2, cy = g.box[1] + r * .2;
-        svg('circle', { cx, cy, r, fill: color(i), stroke: '#fff', 'stroke-width': 2 }, o);
-        const t = svg('text', { x: cx, y: cy + 4 * k, 'font-size': 12 * k, fill: '#fff', 'text-anchor': 'middle' }, o);
+        const r = 10 * k, out = g.box[0] - r - 2 * k > 0 && g.box[1] - r - 2 * k > 0;
+        const cx = out ? g.box[0] - r * .35 : g.box[0] + r, cy = out ? g.box[1] - r * .35 : g.box[1] + r;
+        svg('circle', { cx, cy, r, fill: color(i), stroke: '#fff', 'stroke-width': 1.5 }, o);
+        const t = svg('text', { x: cx, y: cy + 4 * k, 'font-size': 11 * k, fill: '#fff', 'text-anchor': 'middle' }, o);
         t.textContent = n + 1;
 
       });
@@ -202,8 +211,11 @@
     const changed = S.hot !== id;
     S.hot = id;
     if (changed) drawOverlay();
-    document.querySelectorAll('.xr-overlay .grp').forEach(g => g.classList.toggle('on', g.dataset.id === id));
-    document.querySelectorAll('.xr-group').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+    const bl = (S.analysis?.blocks || []).find(b => b.id === id);
+    const on = new Set(bl ? bl.groups : [id]);
+    document.querySelectorAll('.xr-overlay .grp').forEach(g => g.classList.toggle('on', on.has(g.dataset.id)));
+    document.querySelectorAll('.xr-group').forEach(b => b.classList.toggle('on', on.has(b.dataset.id)));
+    document.querySelectorAll('.xr-block').forEach(b => b.classList.toggle('on', b.dataset.id === id));
   }
 
   // ---------------------------------------------------------------- panel
@@ -218,12 +230,12 @@
       el('span', { class: 'xr-pill', text: `${a.grid.alignment} aligned` }),
       meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null,
       S.mine && a.subjects[S.mine] ? el('span', { class: 'xr-pill mine', role: 'status',
-        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', people: 'found by person detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
+        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', people: 'found by person detection', objects: 'found by object detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
     $('xr-notes').replaceChildren(...a.notes.map(n => el('li', { text: n })));
     $('xr-gcount').textContent = a.groups.length;
     const orderPos = Object.fromEntries(a.reading_order.map((id, i) => [id, i + 1]));
     const idx = Object.fromEntries(a.groups.map((g, i) => [g.id, i]));
-    $('xr-groups').replaceChildren(...a.reading_order.map(id => [a.groups[idx[id]], idx[id]]).map(([g, i]) => {
+    const groupItem = (g, i) => {
       const roles = [...new Set(g.members.map(m => label(a.roles[m]?.role || '?')).filter(r => r !== 'shape'))];
       const b = el('button', { class: 'xr-group', type: 'button', 'data-id': g.id,
         'aria-label': `Group ${orderPos[g.id]}: ${g.kind}, ${label(g.role)}. Contains ${roles.join(', ')}. Anchored ${g.anchors.join(', ') || 'nowhere'}.`,
@@ -232,7 +244,20 @@
       el('span', { class: 't' }, el('b', { text: title(g) }), el('small', { text: roles.join(', ') })),
       el('span', { class: 'a', text: g.anchors.join(' ') }));
       return el('li', {}, b);
-    }));
+    };
+    const BLOCK = { copy: 'Copy block', repeat: 'Repeated items', stack: 'Stack' };
+    const items = [];
+    for (const bl of (a.blocks || a.groups.map(g => ({ id: g.id, kind: 'single', groups: [g.id] })))) {
+      const gs = bl.groups.map(id => [a.groups[idx[id]], idx[id]]).sort((p, q) => orderPos[p[0].id] - orderPos[q[0].id]);
+      if (bl.kind === 'single') { items.push(groupItem(...gs[0])); continue; }
+      const what = [...new Set(gs.map(([g]) => label(g.role)))].join(' + ');
+      const head = el('button', { class: 'xr-block', type: 'button', 'data-id': bl.id,
+        'aria-label': `${BLOCK[bl.kind]}: ${what}. These groups move together when the design is resized.`,
+        onmouseenter: () => setHot(bl.id), onfocus: () => setHot(bl.id), onmouseleave: () => setHot(null), onblur: () => setHot(null) },
+        el('span', { class: 'bk', text: BLOCK[bl.kind] }), el('small', { text: what }));
+      items.push(el('li', { class: 'xr-block-li' }, head, el('ol', { class: 'xr-groups nested' }, ...gs.map(([g, i]) => groupItem(g, i)))));
+    }
+    $('xr-groups').replaceChildren(...items);
     $('xr-tiers').replaceChildren(...(a.targets || []).map(t => {
       const k = Math.min(40 / t.width, 32 / t.height);
       return el('li', { class: 'xr-tier' },

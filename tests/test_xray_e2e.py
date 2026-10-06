@@ -69,7 +69,7 @@ class XrayE2E(unittest.TestCase):
         page = self.open('overlay-fullbleed')
         page.set_input_files('#xr-photo', str(path))
         page.wait_for_selector('.xr-pill.mine')
-        self.assertIn('saliency', page.inner_text('.xr-pill.mine'))
+        self.assertRegex(page.inner_text('.xr-pill.mine'), 'saliency|object detection')
         sub = page.evaluate("XR.S.analysis.subjects.photo")
         x, y, w, h = sub['box']
         self.assertGreater(x + w / 2, .5); self.assertLess(y + h / 2, .5)     # the disc is top-right

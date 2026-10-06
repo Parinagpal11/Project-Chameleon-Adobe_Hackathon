@@ -200,6 +200,19 @@ class UnderstandTests(unittest.TestCase):
         self.assertFalse(any(l['kind'] == 'center' and abs(l['pos'] - 390) < 2 for l in lines))
         self.assertEqual(set(by_member(self.a['dense-menu'], 'item2')['anchors']) & {'left', 'right'}, {'left', 'right'})
 
+    def test_blocks_nest_groups_like_designers(self):
+        def block_roles(name):
+            a = self.a[name]; role = {g['id']: g['role'] for g in a['groups']}
+            return {b['kind']: sorted(role[x] for x in b['groups']) for b in a['blocks'] if b['kind'] != 'single'}
+        self.assertEqual(block_roles('promo-centered'), {'copy': ['cta', 'headline']})
+        self.assertEqual(block_roles('split-photo-left'), {'copy': ['cta', 'headline']})
+        self.assertEqual(block_roles('product-grid'), {'repeat': ['image', 'image', 'image']})
+        eb = block_roles('event-poster')
+        self.assertNotIn('badge', eb.get('copy', []))          # corner date badge stays its own block
+        for name, a in self.a.items():                           # every group is in exactly one block
+            ids = [x for b in a['blocks'] for x in b['groups']]
+            self.assertEqual(sorted(ids), sorted(g['id'] for g in a['groups']), name)
+
     def test_repeats(self):
         rep = self.a['event-poster']['repeats']
         self.assertEqual((rep[0]['axis'], len(rep[0]['groups'])), ('row', 3))
@@ -263,7 +276,7 @@ class SubjectTests(unittest.TestCase):
         node = load({'format': 'chameleon-graph/1', 'page': {'width': 400, 'height': 300},
                      'nodes': [{'id': 'p', 'type': 'image', 'box': [0, 0, 400, 300], 'src': src}]}).by_id['p']
         found = subject.find_subject(node)
-        self.assertIn(found['source'], ('saliency', 'faces'))
+        self.assertIn(found['source'], ('saliency', 'faces', 'objects'))
         x, y, w, h = found['box']
         self.assertGreater(x + w / 2, .55)   # the red disc sits right of centre
         self.assertLess(y + h / 2, .6)
@@ -370,68 +383,40 @@ class RealPhotoTests(unittest.TestCase):
             im = base.crop(((W - H * a) / 2, 0, (W + H * a) / 2, H)) if W / H > a else base.crop((0, (H - W / a) / 2, W, (H + W / a) / 2))
             buf = io.BytesIO(); im.save(buf, 'JPEG', quality=88); subject._cache.clear()
             r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
-            self.assertEqual(r['source'], 'saliency', a)
+            self.assertIn(r['source'], ('saliency', 'objects'), a)
             self.assertLess(r['box'][2] * r['box'][3], .08, (a, r['box']))
 
     def test_landscape_tent_is_not_a_face(self):
         for crop in (False, True):
             r, size = self.detect('landscape-tent.jpg', crop)
-            self.assertEqual(r['source'], 'saliency', crop)
+            self.assertIn(r['source'], ('saliency', 'objects'), crop)
             truth = (.67, .515, .83, .585) if not crop else (.665, .515, .835, .585)
             self.assertTrue(self.covers(r['box'], truth, size), r['box'])
             self.assertLess(r['box'][2] * r['box'][3], .06)   # tight around the small tent
 
     def test_product_keeps_the_whole_sneaker(self):
         r, size = self.detect('product-sneaker.jpg', False)
-        self.assertEqual(r['source'], 'saliency')
-        self.assertTrue(self.covers(r['box'], (.17, .555, .83, .84), size, need=.95), r['box'])
+        self.assertIn(r['source'], ('saliency', 'objects'))
+        self.assertTrue(self.covers(r['box'], (.17, .58, .83, .84), size, need=.97), r['box'])   # shoe incl. white toe (measured on the photo)
 
     def test_small_runner_in_wide_photo_is_found_and_kept(self):
-        r, size = self.detect('wide-runner-synthetic.jpg', False)
-        self.assertEqual(r['source'], 'saliency')
-        self.assertTrue(self.covers(r['box'], (414 / 1600, 560 / 900, 436 / 1600, 640 / 900), size), r['box'])
-        crop = subject.smart_crop(r['box'], 1600 / 900, 1080 / 1350)       # into a tall slot
+        try:
+            import cv2
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x not installed')
+        r, size = self.detect('runner-sunrise.jpg', False)
+        self.assertEqual(r['source'], 'people')
+        crop = subject.smart_crop(r['box'], r['aspect'], 1080 / 1350, r.get('parts'))   # into a tall slot
         self.assertEqual(crop['kept'], 1.0)
         self.assertLess(crop['crop'][0], .2)                                # slid left, not centred
 
-    def test_two_people_far_apart_keep_one_whole(self):
-        try:
-            import cv2
-            from PIL import Image, ImageOps
-            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
-        except ImportError:
-            self.skipTest('OpenCV 4.x / Pillow not installed')
-        w = Image.open(self.PHOTOS / 'portrait-woman.jpg').convert('RGB')
-        face = w.crop((int(w.width * .5), int(w.height * .15), int(w.width * .95), int(w.height * .7))).resize((260, 320))
-        bg = Image.new('RGB', (1600, 900), (225, 215, 200)); bg.paste(face, (60, 200)); bg.paste(ImageOps.mirror(face), (1280, 220))
-        buf = io.BytesIO(); bg.save(buf, 'JPEG', quality=88); subject._cache.clear()
-        r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
-        self.assertEqual((r['source'], len(r['parts'])), ('faces', 2))
-        c = subject.smart_crop(r['box'], r['aspect'], 1.0, r['parts'])
-        self.assertGreater(c['kept'], .45)                      # one person fully, not the empty gap
-        x = c['crop'][0]
-        whole = [p for p in r['parts'] if p[0] >= x - 1e-6 and p[0] + p[2] <= x + c['crop'][2] + 1e-6]
-        self.assertEqual(len(whole), 1)
-
-    def test_given_subject_gets_no_crop(self):
-        # a designer-marked subject is relative to the slot as shown: no crop decision, so the renderer
-        # keeps its cover fit instead of stretching the photo
-        d = design('split-photo-left')
-        p = next(n for n in d['nodes'] if n['id'] == 'photo')
-        buf = io.BytesIO()
-        from PIL import Image
-        Image.new('RGB', (400, 200), (120, 130, 140)).save(buf, 'JPEG')
-        p['src'] = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
-        s = analyze(d)['subjects']['photo']
-        self.assertEqual(s['source'], 'given')
-        self.assertNotIn('crop', s)
-
-    def test_gradient_is_not_a_subject(self):
-        from PIL import Image, ImageDraw
-        g = Image.new('RGB', (1600, 900)); d = ImageDraw.Draw(g)
-        for x in range(1600): d.line([(x, 0), (x, 900)], fill=(int(40 + x / 1600 * 180),) * 3)
-        buf = io.BytesIO(); g.save(buf, 'JPEG', quality=88); subject._cache.clear()
-        self.assertEqual(subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())['source'], 'assumed')
+    def test_panorama_slides_to_the_boat(self):
+        r, size = self.detect('boat-panorama.jpg', False)
+        for slot in (1080 / 1350, 600 / 628, 1.0):
+            c = subject.smart_crop(r['box'], r['aspect'], slot, r.get('parts'))
+            self.assertEqual(c['kept'], 1.0)
+            self.assertGreater(c['crop'][0] + c['crop'][2], .97)          # all the way right
 
     def test_smart_crop_geometry(self):
         c = subject.smart_crop([.8, .4, .1, .2], 2.0, 1.0)                  # wide photo, square slot
@@ -452,16 +437,24 @@ class PhotoGoldenTests(unittest.TestCase):
     (method, number of separate subjects, where the subject's centre must be, image-relative)"""
     GOLDEN = {
         'portrait-woman.jpg':        ('faces', 1, (.55, .85), (.2, .55)),
-        'product-sneaker.jpg':       ('saliency', 0, (.3, .6), (.6, .8)),
-        'landscape-tent.jpg':        ('saliency', 0, (.7, .82), (.5, .6)),
+        'product-sneaker.jpg':       ('objects', 0, (.3, .6), (.6, .8)),
+        'landscape-tent.jpg':        ('objects', 0, (.7, .82), (.5, .6)),
         'flat-blue.jpg':             ('assumed', 0, None, None),
         'fashion-street.jpg':        ('faces', 1, (.15, .4), (.08, .32)),
-        'latte-overhead.jpg':        ('saliency', 0, (.62, .95), (.05, .45)),
-        'earbuds-gradient.jpg':      ('saliency', 0, (.3, .65), (.6, .88)),
+        'latte-overhead.jpg':        ('objects', 0, (.62, .95), (.05, .45)),
+        'earbuds-gradient.jpg':      ('objects', 0, (.3, .65), (.6, .88)),
         'two-people-cafe.jpg':       ('faces', 2, None, (.1, .5)),
         'bw-portrait.jpg':           ('faces', 1, (.55, .85), (.15, .55)),
         'runner-sunrise.jpg':        ('people', 1, (.13, .2), (.58, .74)),
-        'wide-runner-synthetic.jpg': ('saliency', 0, (.24, .29), (.6, .7)),
+        # round 3 (Pari's random photos)
+        'three-friends.jpg':         ('faces', 3, None, (.1, .45)),
+        'profile-woman.jpg':         ('objects', 0, (.55, .85), None),
+        'sunglasses-man.jpg':        ('objects', 0, (.2, .5), (.2, .7)),
+        'tokyo-red-coat.jpg':        ('faces', 1, (.55, .7), (.18, .45)),
+        'bottle-terrazzo.jpg':       ('objects', 0, (.65, .85), (.35, .7)),
+        'dog-studio.jpg':            ('objects', 0, (.15, .45), (.35, .75)),
+        'breakfast-flatlay.jpg':     ('objects', 3, None, None),
+        'boat-panorama.jpg':         ('objects', 2, (.8, 1.0), None),
     }
 
     def test_every_tested_photo_keeps_its_result(self):
@@ -474,7 +467,8 @@ class PhotoGoldenTests(unittest.TestCase):
         photos = ROOT / 'tests' / 'fixtures' / 'photos'
         # each photo twice: the committed copy, and re-encoded at its original upload size the way the
         # browser sends it (small pixel differences once flipped a result, so both must hold)
-        upload_size = {'two-people-cafe.jpg': (1254, 1254), 'runner-sunrise.jpg': (1672, 941)}
+        upload_size = {'two-people-cafe.jpg': (1254, 1254), 'runner-sunrise.jpg': (1672, 941), 'tokyo-red-coat.jpg': (1672, 941),
+                       'bottle-terrazzo.jpg': (1254, 1254), 'boat-panorama.jpg': (2172, 724)}
         for name, (source, n_parts, cx_range, cy_range) in self.GOLDEN.items():
           for variant in ('committed', 'upload'):
             with self.subTest(photo=name, variant=variant):

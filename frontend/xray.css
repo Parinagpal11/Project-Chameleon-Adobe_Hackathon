@@ -106,3 +106,14 @@ body.xr { overflow: auto; min-height: 100%; }
 .xr-overlay .pill rect { fill: rgba(17,17,20,.86); }
 .xr-overlay .pill circle { fill: #facc15; }
 .xr-overlay .pill text { fill: #fff; font-weight: 600; }
+
+/* blocks: the parent level of groups */
+.xr-block-li { list-style: none; border: 1px solid var(--line); border-radius: var(--r); padding: 4px; margin: 2px 0; }
+.xr-block { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border-radius: var(--r-sm); border: 0; background: transparent; }
+.xr-block .bk { font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.xr-block small { color: var(--faint); }
+.xr-block:hover, .xr-block.on { background: var(--surface-2); }
+.xr-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.xr-groups.nested { padding-left: 6px; }
+.xr-overlay .blk { fill: rgba(148,163,184,.08); stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+.xr-overlay .pill.block circle { fill: #94a3b8; }

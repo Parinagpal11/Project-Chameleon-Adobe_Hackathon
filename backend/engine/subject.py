@@ -126,9 +126,14 @@ def _faces(img):
     def strong(f):
         return any(_iou([*f], [*s]) >= .5 for s in strict)
     found = [f for f in found if has_eye(f) or (f[2] < 60 and strong(f))]
-    if len(found):   # faces much smaller than the main one are background people, not the subject
+    if len(found):
+        # faces under half the main face's size are usually blurred background people; keep them only
+        # when both eyes are clearly visible (the third friend walking behind is sharp, a stranger isn't)
         biggest = max(f[2] for f in found)
-        found = [f for f in found if f[2] >= biggest * .5]
+        def eyes_n(f):
+            x, y, w, h = (int(v) for v in f)
+            return len(eyes.detectMultiScale(grey[y:y + int(h * .6), x:x + w], 1.1, 3, minSize=(max(8, w // 10),) * 2))
+        found = [f for f in found if f[2] >= biggest * .5 or (f[2] >= biggest * .3 and eyes_n(f) >= 2)]
     if len(found) == 0:
         return None
     W, H = img.size
@@ -345,6 +350,117 @@ def find_subject(node) -> dict:
     return dict(out)
 
 
+MODEL_PATH = __import__('pathlib').Path(__file__).resolve().parent / 'models' / 'u2netp.onnx'
+
+
+def _u2net():
+    """Salient-object model (U²-Net-P, Apache-2.0), loaded once. None if onnxruntime or the file is missing."""
+    if 'u2net' not in _models:
+        try:
+            import onnxruntime as ort
+            opts = ort.SessionOptions()
+            opts.log_severity_level = 3
+            _models['u2net'] = ort.InferenceSession(str(MODEL_PATH), opts, providers=['CPUExecutionProvider'])
+        except Exception:
+            _models['u2net'] = None
+    return _models['u2net']
+
+
+def object_map(img):
+    """Per-pixel 'this is the main object' probability (0..1), same size as `img`.
+
+    Very wide or tall photos are scanned in overlapping square tiles: squashing a 3:1 panorama into the
+    model's 320x320 input makes small subjects (a distant sailboat) vanish."""
+    import numpy as np
+    from PIL import Image
+    sess = _u2net()
+    if sess is None:
+        return None
+    name = sess.get_inputs()[0].name
+    mean, std = np.array([.485, .456, .406]), np.array([.229, .224, .225])
+
+    def run(tile):
+        x = np.asarray(tile.resize((320, 320), Image.BILINEAR), dtype=np.float32) / 255.0
+        x = ((x - mean) / std).transpose(2, 0, 1)[None].astype(np.float32)
+        out = sess.run(None, {name: x})[0][0, 0]
+        return np.asarray(Image.fromarray(out.astype(np.float32)).resize(tile.size, Image.BILINEAR))
+
+    W, H = img.size
+    if max(W, H) / min(W, H) <= 1.6:
+        m = run(img)
+    else:
+        side = min(W, H)
+        n = int(np.ceil(max(W, H) / side * .999)) + 1
+        m = np.zeros((H, W), dtype=np.float32)
+        for i in range(n):
+            off = int(round(i * (max(W, H) - side) / (n - 1)))
+            box = (off, 0, off + side, H) if W > H else (0, off, W, off + side)
+            t = run(img.crop(box))
+            if W > H:
+                m[:, off:off + side] = np.maximum(m[:, off:off + side], t)
+            else:
+                m[off:off + side, :] = np.maximum(m[off:off + side, :], t)
+    return np.clip(m, 0.0, 1.0)
+
+
+def objects_from_map(m):
+    """Main object(s) from the model's map: (box, parts, confidence) or None.
+
+    Separate objects that are about as strong as the best one are all kept (a breakfast flat-lay:
+    bowl, cup and croissant); weak blobs (a rock in the corner of a seascape) are not."""
+    import numpy as np
+    import cv2
+    H, W = m.shape
+    if m.max() < .5:
+        return None
+    mask = (m >= .5).astype(np.uint8)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    comps = []
+    for i in range(1, n):
+        x, y, w, h, area = stats[i]
+        if area < W * H * .0008:
+            continue
+        vals = m[lab == i]
+        comps.append({'box': [x / W, y / H, w / W, h / H], 'area': area / (W * H),
+                      'mean': float(vals.mean()), 'peak': float(vals.max()), 'mass': float(vals.sum())})
+    if not comps:
+        return None
+    comps.sort(key=lambda c: -c['mass'])
+    best = comps[0]
+    if best['peak'] < .8 or best['mean'] < .6:
+        return None
+    keep = [c for c in comps if c['mass'] >= best['mass'] * .2 and c['mean'] >= best['mean'] * .9]
+    def near(a, b, gap=.04):
+        ax, ay, aw, ah = a['box']; bx, by, bw, bh = b['box']
+        return max(0, bx - (ax + aw), ax - (bx + bw)) <= gap and max(0, by - (ay + ah), ay - (by + bh)) <= gap
+    for c in comps:   # small but equally strong objects touching a kept one belong to the scene's subject (boat by a cliff)
+        if c not in keep and c['mean'] >= best['mean'] * .9 and any(near(c, k) for k in keep):
+            keep.append(c)
+    def pad(b, k=.06):
+        x, y, w, h = b
+        x0, y0 = max(0.0, x - w * k), max(0.0, y - h * k)
+        x1, y1 = min(1.0, x + w * (1 + k)), min(1.0, y + h * (1 + k))
+        return [x0, y0, x1 - x0, y1 - y0]
+    parts = [pad(c['box']) for c in sorted(keep, key=lambda c: c['box'][0])]
+    x0 = min(p[0] for p in parts); y0 = min(p[1] for p in parts)
+    x1 = max(p[0] + p[2] for p in parts); y1 = max(p[1] + p[3] for p in parts)
+    covered = sum(c['area'] for c in keep)
+    conf = round(min(1.0, best['mean']) * (0.5 if covered > .6 else 1.0), 3)
+    return [x0, y0, x1 - x0, y1 - y0], parts, conf
+
+
+def _accept_people(people, m):
+    """Drop person boxes cut off by the photo edge (not a full body) or sitting on a known object
+    that isn't person-shaped (the HOG detector fired on a dog's legs)."""
+    out = []
+    for p in people:
+        x, y, w, h = p
+        if x <= .01 or y <= .01 or x + w >= .99 or y + h >= .99:
+            continue
+        out.append(p)
+    return out
+
+
 def _detect(src: str) -> dict:
     img = _open(src)
     if img is None:
@@ -355,6 +471,25 @@ def _detect(src: str) -> dict:
         box, parts = face
         return {'box': [round(v, 4) for v in box], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect,
                 'parts': [[round(v, 4) for v in p] for p in parts]}
+    # 2. the salient-object model (the standard approach in modern cut-out / smart-crop tools)
+    omap = object_map(img)
+    if omap is not None:
+        found = objects_from_map(omap)
+        if found:
+            box, parts, conf = found
+            out = {'box': [round(v, 4) for v in box], 'source': 'objects', 'confidence': conf, 'aspect': aspect}
+            if len(parts) > 1:
+                out['parts'] = [[round(v, 4) for v in p] for p in parts]
+            return out
+        # 3. nothing stands out as an object: maybe a small person in a big scene
+        people = _accept_people(_people(img), omap)
+        if people:
+            x0 = min(p[0] for p in people); y0 = min(p[1] for p in people)
+            x1 = max(p[0] + p[2] for p in people); y1 = max(p[1] + p[3] for p in people)
+            return {'box': [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)], 'source': 'people',
+                    'confidence': 0.7, 'aspect': aspect, 'parts': [[round(v, 4) for v in p] for p in people]}
+        return {'box': CENTRE, 'source': 'assumed', 'confidence': 0.0, 'aspect': aspect}
+    # fallback without the model: classical colour-contrast saliency
     # two scales: the coarse map keeps big subjects whole, the fine one finds small ones
     # (a runner on a wide road is ~1 px at 96 px). Keep whichever is more confident.
     found = []

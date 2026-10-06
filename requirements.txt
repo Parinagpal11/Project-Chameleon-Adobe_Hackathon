@@ -4,3 +4,5 @@ numpy>=1.26
 # face detection for photo subjects (optional: without it, saliency is used).
 # Pinned below 5: OpenCV 5 removed the CascadeClassifier face detector we use.
 opencv-python-headless>=4.8,<5
+# salient-object model for photo subjects (bundled U2-Net-P, Apache-2.0). Optional: classical saliency is used without it
+onnxruntime>=1.17
