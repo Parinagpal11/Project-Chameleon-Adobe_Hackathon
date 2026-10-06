@@ -119,7 +119,9 @@
         svg('path', { d: p, stroke: '#000', 'stroke-width': 5, fill: 'none', opacity: .35 }, o);
         svg('path', { d: p, stroke: c, 'stroke-width': 3, fill: 'none' }, o);
         svg('circle', { cx: x + w / 2, cy: y + h / 2, r: 4 * k, fill: c, stroke: '#000', 'stroke-width': 1 }, o);
-        tag(o, x + 4 * k, y + h - 4 * k, `subject · ${s.source}`, '#a16207', k);
+        // label outside the brackets so it never covers the subject: below if there's room, else above
+        const below = y + h + 24 * k < H;
+        tag(o, x, below ? y + h + 6 * k : y - 6 * k, `subject · ${s.source}`, '#a16207', k, { below });
       }
     }
     if (S.on.groups) {
