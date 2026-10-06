@@ -1014,11 +1014,12 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
         logo.remove(gr)
         it = Item(gr, g, roles)
         it.align = 'left'
-        k_logo = max(s, 12 / max(1.0, it.box.h))
+        k_floor = MIN_TEXT / min(n.font_size for n in it.texts) if it.texts else 12 / max(1.0, it.box.h)
+        k_logo = max(s, k_floor)
         lw, lh = it.measure(k_logo, W)
         pad = max(6.0, m * .6)
         if photo_region and photo_region.w * .5 < lw and photo_region.w > 2 * pad:
-            k_logo *= (photo_region.w * .5) / lw
+            k_logo = max(k_floor, k_logo * (photo_region.w * .5) / lw)
             lw, lh = it.measure(k_logo, W)
         if photo_region and lw + 2 * pad <= photo_region.w and lh + 2 * pad <= photo_region.h and it.min_font(k_logo) >= MIN_TEXT * .99 \
                 or photo_region and not it.texts and lw + 2 * pad <= photo_region.w and lh + 2 * pad <= photo_region.h:
