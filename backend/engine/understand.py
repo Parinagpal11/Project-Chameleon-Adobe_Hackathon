@@ -499,7 +499,8 @@ def find_blocks(g: Graph, groups: list[dict], repeats: list[dict], dividers: lis
         buckets.setdefault(dsu.find(i), []).append(gr)
     for members in buckets.values():
         if len(members) >= 2:
-            blocks.append({'kind': 'copy' if any(m['role'] == 'headline' for m in members) else 'stack',
+            copy = any(m['role'] == 'headline' for m in members) and any(m['kind'] == 'button' for m in members)
+            blocks.append({'kind': 'copy' if copy else 'stack',
                            'groups': [m['id'] for m in sorted(members, key=lambda m: m['box'].y)]})
             used.update(m['id'] for m in members)
     for gr in groups:

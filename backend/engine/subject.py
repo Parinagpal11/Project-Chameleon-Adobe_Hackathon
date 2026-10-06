@@ -444,6 +444,15 @@ def objects_from_map(m):
     for c in comps:   # small but equally strong objects touching a kept one belong to the scene's subject (boat by a cliff)
         if c not in keep and c['mean'] >= best['mean'] * .9 and any(near(c, k) for k in keep):
             keep.append(c)
+    for c in comps:   # a small, crisp, compact object (a sailboat on open water) is a subject even beside a big one
+        x, y, w, h = c['box']
+        # only in panoramas (where tiling makes a big neighbour dominate) and only upright shapes, so wide
+        # strips of cloud or horizon never qualify
+        panorama = max(W, H) / min(W, H) > 1.6
+        upright = h * H >= w * W
+        compact = c['area'] / max(w * h, 1e-6) >= .35 and h * H / (w * W) <= 6
+        if panorama and upright and c not in keep and c['mean'] >= .85 and c['peak'] >= .97 and compact and c['area'] <= .02:
+            keep.append(c)
     def pad(b, k=.06):
         x, y, w, h = b
         x0, y0 = max(0.0, x - w * k), max(0.0, y - h * k)
