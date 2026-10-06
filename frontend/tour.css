@@ -1,0 +1,166 @@
+/* Tour card, spotlight and looping example animations (6s loops; paused/still under reduced motion). */
+.tour { position: fixed; z-index: 85; width: 360px; max-width: calc(100vw - 20px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-xl); box-shadow: var(--shadow); overflow: hidden; }
+.tour-stage { position: relative; height: 170px; background: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 12px 12px; overflow: hidden; border-bottom: 1px solid var(--line); }
+.tour-body { padding: 14px 16px 14px; }
+.tour-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+.tour h2 { font-size: 15px; margin: 2px 0 6px; }
+.tour p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.tour .tour-try { color: var(--text); font-weight: 500; background: var(--accent-soft); border-radius: var(--r); padding: 6px 9px; }
+.tour .tour-try:empty { display: none; }
+.tour-dots { display: flex; gap: 5px; margin: 10px 0 12px; }
+.tour-dots button { width: 7px; height: 7px; padding: 0; border-radius: 50%; border: 0; background: var(--line-2); }
+.tour-dots button[aria-selected="true"] { background: var(--accent); width: 18px; border-radius: 99px; }
+.tour-actions { display: flex; gap: 6px; align-items: center; }
+.tour-spot { position: fixed; z-index: 84; border-radius: var(--r-lg); box-shadow: 0 0 0 2px var(--accent), 0 0 0 9999px rgba(0,0,0,.28); pointer-events: none; transition: all var(--dur-slow) var(--ease); }
+.guide-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 16px; max-height: 70vh; overflow: auto; }
+.guide-item { display: grid; gap: 8px; text-align: left; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.guide-item:hover { border-color: var(--accent); }
+.guide-item b { display: block; font-size: 12.5px; } .guide-item small { color: var(--faint); font-size: 11.5px; line-height: 1.35; display: block; }
+.guide-thumb { height: 104px; border-radius: var(--r); display: block; }
+
+/* ── shared mini-ad ── */
+.st { position: absolute; inset: 0; --loop: 6s; }
+.mf { position: absolute; background: #e6b56e; border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.28); overflow: hidden; }
+.mf i { position: absolute; display: block; }
+.mf .im { left: 56%; top: 8%; width: 36%; height: 84%; background: #cc874e; border-radius: 1px; }
+.mf .lg { left: 8%; top: 10%; width: 22%; height: 6%; background: #2b1d14; border-radius: 2px; }
+.mf .hd { left: 8%; top: 25%; width: 40%; height: 9%; background: #2b1d14; border-radius: 1px; }
+.mf .hd.s { top: 38%; width: 30%; height: 6%; opacity: .75; }
+.mf .bt { left: 8%; top: 56%; width: 26%; height: 12%; background: #26402f; border-radius: 3px; }
+.mf.tall .im { left: 8%; top: 6%; width: 84%; height: 40%; }
+.mf.tall .lg { left: 34%; top: 51%; width: 32%; height: 4%; } .mf.tall .hd { left: 16%; top: 60%; width: 68%; height: 7%; }
+.mf.tall .hd.s { left: 26%; top: 70%; width: 48%; height: 4%; } .mf.tall .bt { left: 30%; top: 80%; width: 40%; height: 8%; }
+.mf.wide .im { left: 60%; width: 32%; }
+.mf.ban .im { left: 78%; top: 14%; width: 18%; height: 72%; }
+.mf.ban .lg { left: 4%; top: 38%; width: 10%; height: 22%; } .mf.ban .hd { left: 18%; top: 22%; width: 30%; height: 22%; }
+.mf.ban .hd.s { left: 18%; top: 56%; width: 22%; height: 16%; } .mf.ban .bt { left: 54%; top: 28%; width: 18%; height: 44%; }
+.cur { position: absolute; width: 18px; height: 18px; fill: #fff; stroke: #111; stroke-width: 1.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); z-index: 5; }
+.pop { position: absolute; z-index: 4; display: grid; gap: 4px; padding: 7px; width: 98px; background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow); font-size: 8.5px; color: var(--text); opacity: 0; }
+.pop b { font-size: 8.5px; }
+.pop span { display: block; padding: 3px 5px; border-radius: 4px; font-weight: 700; }
+.pop .pbtn { background: var(--accent-strong); color: #fff; } .pop .pbtn2 { background: var(--surface-2); }
+.lbl { position: absolute; font-size: 8px; font-weight: 600; color: var(--muted); }
+
+/* ── 1 canvas ── */
+.st-canvas .world { position: absolute; inset: 0; animation: zoomPulse var(--loop) ease-in-out infinite; transform-origin: 55% 50%; }
+.st-canvas .f1 { left: 8%; top: 18%; width: 15%; height: 62%; } .st-canvas .f2 { left: 29%; top: 18%; width: 25%; height: 44%; }
+.st-canvas .f3 { left: 60%; top: 18%; width: 32%; height: 30%; } .st-canvas .f4 { left: 60%; top: 62%; width: 32%; height: 10%; }
+.st-canvas .mf { animation: appear var(--loop) ease-out infinite; }
+.st-canvas .f2 { animation-delay: .15s; } .st-canvas .f3 { animation-delay: .3s; } .st-canvas .f4 { animation-delay: .45s; }
+.st-canvas .l1 { left: 8%; top: 10%; } .st-canvas .l2 { left: 29%; top: 10%; } .st-canvas .l3 { left: 60%; top: 10%; } .st-canvas .l4 { left: 60%; top: 54%; }
+.st-canvas .cur { animation: curPan var(--loop) ease-in-out infinite; }
+@keyframes appear { 0% { opacity: 0; transform: scale(.85); } 12%, 100% { opacity: 1; transform: none; } }
+@keyframes zoomPulse { 0%, 35% { transform: scale(1); } 55%, 75% { transform: scale(1.18) translate(-4%, 2%); } 95%, 100% { transform: scale(1); } }
+@keyframes curPan { 0%, 30% { left: 80%; top: 80%; } 55%, 75% { left: 52%; top: 52%; } 100% { left: 80%; top: 80%; } }
+
+/* ── 2 teach / 3 scope ── */
+.st-teach .big, .st-scope .big { left: 6%; top: 12%; width: 40%; height: 76%; }
+.st-teach .s1, .st-scope .s1 { left: 54%; top: 12%; width: 11%; height: 46%; } .st-teach .s2, .st-scope .s2 { left: 70%; top: 12%; width: 24%; height: 28%; }
+.st-teach .s3 { left: 70%; top: 50%; width: 24%; height: 9%; }
+.st-teach .big .lg, .st-scope .big .lg { animation: logoDrag var(--loop) ease-in-out infinite; }
+.st-teach .s1 .lg { animation: jumpTall var(--loop) ease-in-out infinite; } .st-teach .s2 .lg { animation: jumpSq var(--loop) ease-in-out infinite; }
+.st-teach .s3 .lg { animation: jumpBan var(--loop) ease-in-out infinite; }
+.st-teach .pop, .st-scope .pop { left: 50%; top: 58%; animation: popIn var(--loop) ease-out infinite; }
+.st-teach .pbtn { animation: press var(--loop) infinite; } .st-scope .pbtn2 { animation: press var(--loop) infinite; }
+.st-teach .cur { animation: curTeach var(--loop) ease-in-out infinite; }
+.st-scope .cur { animation: curScope var(--loop) ease-in-out infinite; }
+.st-scope .lock { position: absolute; left: 6%; top: 4%; font-size: 9px; opacity: 0; animation: lockIn var(--loop) infinite; }
+.st-scope .lock::before { content: ''; display: inline-block; width: 7px; height: 6px; border: 1.5px solid var(--accent); border-radius: 1px; margin-right: 3px; vertical-align: -1px; }
+@keyframes logoDrag { 0%, 18% { left: 8%; top: 10%; } 38%, 92% { left: 70%; top: 85%; } 100% { left: 8%; top: 10%; } }
+@keyframes jumpTall { 0%, 62% { left: 34%; top: 51%; } 68%, 92% { left: 60%; top: 92%; width: 32%; } 100% { left: 34%; top: 51%; } }
+@keyframes jumpSq { 0%, 62% { left: 8%; top: 10%; } 68%, 92% { left: 70%; top: 85%; } 100% { left: 8%; top: 10%; } }
+@keyframes jumpBan { 0%, 62% { left: 4%; top: 38%; } 68%, 92% { left: 84%; top: 70%; height: 18%; } 100% { left: 4%; top: 38%; } }
+@keyframes popIn { 0%, 40% { opacity: 0; transform: translateY(6px); } 45%, 62% { opacity: 1; transform: none; } 68%, 100% { opacity: 0; } }
+@keyframes press { 0%, 54% { filter: none; transform: none; } 57% { transform: scale(.92); filter: brightness(1.2); } 60%, 100% { transform: none; filter: none; } }
+@keyframes curTeach { 0% { left: 40%; top: 85%; } 15% { left: 14%; top: 20%; } 18% { left: 14%; top: 20%; } 38% { left: 38%; top: 82%; } 50% { left: 38%; top: 82%; } 57% { left: 62%; top: 72%; } 70%, 100% { left: 70%; top: 92%; } }
+@keyframes curScope { 0% { left: 40%; top: 85%; } 15%, 18% { left: 14%; top: 20%; } 38%, 50% { left: 38%; top: 82%; } 57% { left: 62%; top: 82%; } 70%, 100% { left: 75%; top: 95%; } }
+@keyframes lockIn { 0%, 60% { opacity: 0; } 65%, 92% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ── 4 inspector ── */
+.st-insp .panel-mock { position: absolute; right: 6%; top: 10%; width: 40%; height: 80%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 8px; align-content: start; }
+.st-insp .big { left: 6%; top: 14%; width: 40%; height: 72%; }
+.scope-mock { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 5px; font-size: 7.5px; font-weight: 700; color: var(--muted); }
+.scope-mock span { position: relative; z-index: 1; text-align: center; padding: 3px 0; }
+.scope-mock .knob { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); background: var(--surface); border-radius: 4px; box-shadow: var(--shadow-sm); animation: knob var(--loop) infinite; }
+.pin-mock { position: relative; display: grid; grid-template-columns: repeat(3, 10px); gap: 3px; padding: 4px; background: var(--surface-2); border-radius: 5px; width: max-content; }
+.pin-mock i { width: 10px; height: 10px; display: grid; place-items: center; } .pin-mock i::before { content: ''; width: 4px; height: 4px; margin: 3px; display: block; background: var(--line-2); border-radius: 1px; }
+.pin-mock .dot { position: absolute; width: 6px; height: 6px; background: var(--accent); border-radius: 1.5px; animation: pinDot var(--loop) infinite; }
+.seg-mock { position: relative; display: grid; grid-template-columns: repeat(3, 16px); gap: 2px; padding: 2px; background: var(--surface-2); border-radius: 5px; width: max-content; height: 16px; }
+.seg-mock .segsel { position: absolute; top: 2px; width: 16px; height: 12px; background: var(--surface); border-radius: 3px; box-shadow: var(--shadow-sm); animation: segSel var(--loop) infinite; }
+.step-mock { display: flex; gap: 6px; align-items: center; font: 600 8px var(--mono); color: var(--text); } .step-mock i { font-style: normal; padding: 1px 5px; background: var(--surface-2); border-radius: 3px; }
+.st-insp .big .lg { animation: inspLogo var(--loop) ease-in-out infinite; }
+.st-insp .big .bt { animation: inspBtn var(--loop) ease-in-out infinite; }
+@keyframes knob { 0%, 70% { transform: none; } 75%, 95% { transform: translateX(100%); } 100% { transform: none; } }
+@keyframes pinDot { 0%, 15% { left: 6px; top: 6px; opacity: 0; } 20% { opacity: 1; left: 6px; top: 6px; } 35%, 100% { left: 32px; top: 6px; opacity: 1; } }
+@keyframes segSel { 0%, 45% { left: 2px; } 52%, 100% { left: 20px; } }
+@keyframes inspLogo { 0%, 30% { left: 8%; top: 10%; } 38%, 100% { left: 70%; top: 6%; } }
+@keyframes inspBtn { 0%, 48% { left: 8%; } 55%, 100% { left: 22%; } }
+
+/* ── 5 type ── */
+.input-mock { position: absolute; left: 6%; top: 10%; width: 88%; height: 26px; background: var(--surface); border: 1px solid var(--accent); border-radius: 7px; padding: 0 8px; display: flex; align-items: center; font-size: 10px; color: var(--text); overflow: hidden; }
+.input-mock .typed { display: inline-block; overflow: hidden; white-space: nowrap; width: 0; animation: typing var(--loop) steps(31) infinite; }
+.input-mock .caret { width: 1px; height: 12px; background: var(--accent); animation: blink .8s steps(1) infinite; }
+.chip-mock { position: absolute; left: 6%; top: 34%; padding: 3px 8px; border-radius: 99px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent); font-size: 9px; font-weight: 700; opacity: 0; animation: chipIn var(--loop) infinite; }
+.st-type .s1 { left: 8%; top: 52%; width: 22%; height: 40%; } .st-type .s2 { left: 38%; top: 64%; width: 54%; height: 16%; }
+.st-type .s2 .hd.s { animation: fadeOff var(--loop) infinite; }
+@keyframes typing { 0% { width: 0; } 45%, 100% { width: 31ch; } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes chipIn { 0%, 50% { opacity: 0; transform: translateY(4px); } 56%, 95% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes fadeOff { 0%, 62% { opacity: .75; } 70%, 94% { opacity: 0; } 100% { opacity: .75; } }
+
+/* ── 6 bubbles ── */
+.st-bub .tray { position: absolute; left: 50%; top: 18%; display: grid; gap: 6px; }
+.st-bub .tray span, .st-bub .fly { display: inline-block; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--surface); font-size: 9px; font-weight: 700; color: var(--text); width: max-content; }
+.st-bub .big { left: 6%; top: 12%; width: 38%; height: 76%; }
+.st-bub .fly { position: absolute; z-index: 4; border-color: var(--accent); box-shadow: var(--shadow); animation: bubFly var(--loop) ease-in-out infinite; }
+.st-bub .big .lg { animation: bubLogo var(--loop) ease-in-out infinite; }
+.st-bub .cur { animation: bubCur var(--loop) ease-in-out infinite; }
+@keyframes bubFly { 0%, 10% { left: 50%; top: 66%; opacity: 1; } 40% { left: 14%; top: 18%; opacity: 1; } 46%, 100% { left: 14%; top: 18%; opacity: 0; } }
+@keyframes bubCur { 0%, 10% { left: 56%; top: 72%; } 40% { left: 20%; top: 24%; } 100% { left: 20%; top: 24%; } }
+@keyframes bubLogo { 0%, 46% { left: 8%; top: 10%; } 54%, 94% { left: 70%; top: 6%; } 100% { left: 8%; top: 10%; } }
+
+/* ── 7 drop ── */
+.st-drop .s1 { left: 8%; top: 22%; width: 14%; height: 66%; } .st-drop .s2 { left: 28%; top: 22%; width: 30%; height: 50%; } .st-drop .s3 { left: 64%; top: 22%; width: 30%; height: 32%; }
+.st-drop .file { position: absolute; z-index: 4; width: 34px; height: 26px; border-radius: 4px; box-shadow: var(--shadow); border: 2px solid #fff; }
+.st-drop .f-photo { background: linear-gradient(135deg, #1e3c5a 0 45%, #f0c850 45% 70%, #c83c3c 70%); animation: dropPhoto var(--loop) ease-in infinite; }
+.st-drop .f-logo { background: #fff; animation: dropLogo var(--loop) ease-in infinite; }
+.st-drop .f-logo::after { content: ''; position: absolute; left: 5px; right: 5px; top: 9px; height: 6px; background: #111; border-radius: 2px; }
+.st-drop .mf .im { animation: imgSwap var(--loop) infinite; }
+.st-drop .mf .lg { animation: logoSwap var(--loop) infinite; }
+@keyframes dropPhoto { 0% { left: 30%; top: -30%; opacity: 1; } 30% { left: 38%; top: 34%; opacity: 1; } 36%, 100% { left: 38%; top: 34%; opacity: 0; } }
+@keyframes dropLogo { 0%, 30% { left: 60%; top: -30%; opacity: 1; } 56% { left: 34%; top: 26%; opacity: 1; } 62%, 100% { left: 34%; top: 26%; opacity: 0; } }
+@keyframes imgSwap { 0%, 34% { background: #cc874e; } 40%, 94% { background: linear-gradient(135deg, #1e3c5a 0 45%, #f0c850 45% 70%, #c83c3c 70%); } 100% { background: #cc874e; } }
+@keyframes logoSwap { 0%, 60% { background: #2b1d14; border-radius: 2px; } 66%, 94% { background: #111; border-radius: 6px; box-shadow: 0 0 0 1px #fff; } 100% { background: #2b1d14; } }
+
+/* ── 8 checks ── */
+.layers-mock { position: absolute; left: 6%; top: 12%; width: 40%; display: grid; gap: 4px; }
+.layers-mock .r { display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 7px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); font: 600 8.5px var(--font); font-style: normal; color: var(--text); }
+.layers-mock .r::after { content: ''; margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.layers-mock .r.warn::after { background: var(--warn); animation: pulseDot 1.2s ease-in-out infinite; }
+.layers-mock .r.warn { animation: rowSel var(--loop) infinite; }
+.opts { position: absolute; left: 52%; top: 22%; width: 42%; height: 52%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.opts .o { position: relative; display: block; border-radius: 4px; background: #e6b56e; border: 1px solid var(--line); }
+.opts .o::before { content: ''; position: absolute; background: #cc874e; inset: 8% 8% 50% 8%; } .opts .o2::before { inset: 50% 8% 8% 8%; } .opts .o3::before { inset: 8% 8% 8% 55%; }
+.opts .ring { position: absolute; top: -3px; bottom: -3px; width: calc((100% - 12px) / 3 + 6px); border: 2px solid var(--accent); border-radius: 6px; animation: ring var(--loop) steps(1) infinite; }
+@keyframes pulseDot { 50% { transform: scale(1.6); } }
+@keyframes rowSel { 0%, 30% { border-color: var(--line); } 35%, 100% { border-color: var(--accent); background: var(--accent-soft); } }
+@keyframes ring { 0% { left: -3px; } 33% { left: calc((100% + 6px) / 3 - 3px); } 66% { left: calc((100% + 6px) * 2 / 3 - 3px); } }
+
+/* ── 9 export ── */
+.st-export .exp-btn { position: absolute; left: 10%; top: 40%; padding: 7px 14px; border-radius: 7px; background: var(--accent-strong); color: #fff; font-size: 11px; font-weight: 700; animation: press var(--loop) infinite; animation-delay: -2.9s; }
+.st-export .png { position: absolute; left: 28%; top: 42%; width: 18px; height: 22px; border-radius: 2px; background: #e6b56e; border: 2px solid #fff; box-shadow: var(--shadow-sm); opacity: 0; animation: fly var(--loop) ease-in infinite; }
+.st-export .p2 { animation-delay: .25s; width: 26px; height: 16px; } .st-export .p3 { animation-delay: .5s; width: 14px; height: 26px; } .st-export .p4 { animation-delay: .75s; width: 30px; height: 8px; }
+.st-export .zip { position: absolute; right: 12%; top: 26%; width: 70px; height: 76px; border-radius: 8px; background: var(--surface); border: 1.5px solid var(--line-2); display: grid; place-items: center; align-content: center; gap: 2px; font: 800 13px var(--mono); color: var(--text); box-shadow: var(--shadow-sm); }
+.st-export .zip span { font: 600 8.5px var(--font); color: var(--accent); opacity: 0; animation: zipCount var(--loop) infinite; }
+@keyframes fly { 0%, 10% { opacity: 0; transform: none; } 15% { opacity: 1; transform: none; } 45% { opacity: 1; transform: translate(150px, -4px) scale(.7); } 50%, 100% { opacity: 0; transform: translate(150px, -4px) scale(.5); } }
+@keyframes zipCount { 0%, 50% { opacity: 0; } 56%, 95% { opacity: 1; } 100% { opacity: 0; } }
+
+/* paused / reduced motion: freeze on a representative moment */
+.tour-stage.still *, .tour-stage.still *::before, .tour-stage.still *::after { animation-play-state: paused !important; animation-delay: calc(var(--loop, 6s) * -.8) !important; }
+.tour-stage.mini { height: 100%; }
+.tour-stage.mini .pop { transform: scale(.85); }
+/* frame flash when a rule lands */
+.frame.flash::after { content: ''; position: absolute; inset: -6px; border: 3px solid var(--ok); border-radius: 4px; animation: frameFlash 1s ease-out forwards; pointer-events: none; }
+@keyframes frameFlash { 0% { opacity: 0; } 25% { opacity: .9; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .frame.flash::after { animation: none; opacity: 0; } }
+.guide-thumb.tour-stage { height: 104px; border: 1px solid var(--line); }

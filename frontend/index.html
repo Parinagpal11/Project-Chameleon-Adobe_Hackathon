@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chameleon Studio</title>
+<script>
+  /* Apply the saved or system theme before paint to avoid a flash. */
+  (function () { var t = null; try { t = localStorage.getItem('chameleon.theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t; })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@600;800&family=DM+Serif+Display&display=swap">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/tour.css">
+</head>
+<body>
+<a class="skip" href="#viewport">Skip to canvas</a>
+
+<!-- ═════════════════════════ HOME ═════════════════════════ -->
+<div id="home" class="home">
+  <div class="morphing-canvas-container home-silk" aria-hidden="true"><canvas id="silk-canvas" data-transparent></canvas></div>
+  <header class="home-top">
+    <a class="brand" href="/" aria-label="Chameleon home"><span class="brand-mark" aria-hidden="true"></span><span>chameleon</span></a>
+    <div class="home-top-actions">
+      <button class="btn ghost sm" id="silk-toggle" type="button" aria-pressed="true" title="Pause or play the background animation">Pause motion</button>
+      <button class="btn ghost" id="home-tour"><svg class="i"><use href="#i-play"/></svg>Product tour</button>
+      <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
+    </div>
+  </header>
+  <main class="home-main">
+    <section class="home-intro">
+      <div>
+        <h1>Adapt one campaign to every format.</h1>
+        <p class="muted">Lay out every social and display size at once. Fix one, and Chameleon applies the same fix to all of them.</p>
+      </div>
+    </section>
+
+    <section class="new-row" aria-label="Start a campaign">
+      <button class="new-tile" id="new-sample">
+        <span class="tile-icon"><svg class="i"><use href="#i-plus"/></svg></span>
+        <span><b>New from sample</b><small>Coffee campaign, 6 formats</small></span>
+      </button>
+      <label class="new-tile drop-tile" id="home-drop" tabindex="0">
+        <input type="file" id="home-files" accept="image/*,.json,application/json" multiple class="visually-hidden">
+        <span class="tile-icon accent"><svg class="i"><use href="#i-upload"/></svg></span>
+        <span><b>Drop your product photo &amp; logo</b><small>We’ll sort which is which · or click to browse</small></span>
+      </label>
+      <label class="new-tile" id="home-import">
+        <input type="file" id="home-json" accept="application/json,.json" class="visually-hidden">
+        <span class="tile-icon"><svg class="i"><use href="#i-file"/></svg></span>
+        <span><b>Import JSON</b><small>A Chameleon design or project file</small></span>
+      </label>
+      <div class="demo-tile" aria-label="Animated example: fix one format and every format updates">
+        <div class="demo-stage" id="home-demo"></div>
+        <div class="demo-cap"><b>Fix once, update everywhere</b><button class="link" id="home-demo-tour">See how →</button></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="tpl-title">
+      <div class="sec-head"><h2 id="tpl-title">Templates</h2></div>
+      <div class="cards" id="templates"></div>
+    </section>
+
+    <section aria-labelledby="recent-title">
+      <div class="sec-head"><h2 id="recent-title">Recent campaigns</h2><span class="muted small" id="recent-count"></span></div>
+      <div class="cards" id="recents"></div>
+    </section>
+  </main>
+</div>
+
+<!-- ═════════════════════════ EDITOR ═════════════════════════ -->
+<div id="editor" class="editor" hidden>
+  <main id="viewport" class="viewport" tabindex="0" aria-label="Canvas with all formats. Arrow keys nudge the selection, Tab moves between elements.">
+    <div id="world" class="world"></div>
+    <div id="overlay" class="overlay">
+      <div id="hover-box" class="hover-box" hidden></div>
+      <div id="sel-box" class="sel-box" hidden>
+        <span class="sel-tag" id="sel-tag"></span>
+        <span class="handle nw" data-h="nw"></span><span class="handle ne" data-h="ne"></span><span class="handle sw" data-h="sw"></span><span class="handle se" data-h="se"></span>
+      </div>
+      <div id="drop-hint" class="drop-hint" hidden></div>
+    </div>
+    <div id="noticed" class="noticed" role="dialog" aria-labelledby="noticed-title" hidden>
+      <div class="noticed-head"><svg class="i accent-ic"><use href="#i-sparkle"/></svg><h2 id="noticed-title">Make this a rule?</h2></div>
+      <p id="noticed-desc" class="muted small"></p>
+      <div id="noticed-options" class="noticed-options" role="radiogroup" aria-label="Rule to save"></div>
+      <div class="noticed-actions">
+        <button class="btn primary sm" id="noticed-all">All frames <kbd>↵</kbd></button>
+        <button class="btn sm" id="noticed-one">This frame only</button>
+        <button class="btn ghost sm" id="noticed-undo" aria-label="Undo change (Esc)">Undo</button>
+      </div>
+    </div>
+  </main>
+
+  <header class="ed-top">
+    <div class="ed-left">
+      <button class="icon-btn" id="main-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Main menu" title="Main menu"><span class="brand-mark sm" aria-hidden="true"></span></button>
+      <div class="menu" id="main-menu" role="menu" hidden></div>
+      <input id="project-name" class="project-name" aria-label="Campaign name" maxlength="80" spellcheck="false">
+      <span id="save-state" class="save-state small" role="status" aria-live="polite"></span>
+    </div>
+    <div class="ed-right">
+      <button class="icon-btn" id="undo" aria-label="Undo" title="Undo (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
+      <button class="icon-btn" id="redo" aria-label="Redo" title="Redo (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
+      <button class="btn ghost" id="tour-btn" title="Product tour"><svg class="i"><use href="#i-help"/></svg><span class="hide-sm">Tour</span></button>
+      <div class="split">
+        <button class="btn primary" id="export-all" aria-label="Export all frames as a ZIP of PNGs"><svg class="i"><use href="#i-download"/></svg><span class="hide-sm">Export</span><span class="badge" id="export-count">0</span></button>
+        <button class="btn primary caret" id="export-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="More export options"><svg class="i"><use href="#i-chevronDown"/></svg></button>
+        <div class="menu right" id="export-menu" role="menu" hidden>
+          <button role="menuitem" data-export="zip"><svg class="i"><use href="#i-download"/></svg>All frames · PNG (.zip)<kbd>⌘E</kbd></button>
+          <button role="menuitem" data-export="png"><svg class="i"><use href="#i-image"/></svg>Selected frame · PNG</button>
+          <button role="menuitem" data-export="json"><svg class="i"><use href="#i-file"/></svg>Project file · JSON</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- left: layers & assets -->
+  <aside id="left" class="panel left" aria-label="Layers and assets">
+    <div class="tabs" role="tablist" aria-label="Left panel">
+      <button role="tab" id="tab-layers" aria-controls="pane-layers" aria-selected="true">Layers</button>
+      <button role="tab" id="tab-assets" aria-controls="pane-assets" aria-selected="false" tabindex="-1">Assets</button>
+    </div>
+    <section id="pane-layers" role="tabpanel" aria-labelledby="tab-layers" class="pane">
+      <div class="pane-head"><span class="label">Frames</span>
+        <button class="icon-btn sm" id="add-frame-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Add frame" title="Add frame"><svg class="i"><use href="#i-plus"/></svg></button></div>
+      <ul id="layers" class="tree" role="tree" aria-label="Frames and elements"></ul>
+    </section>
+    <section id="pane-assets" role="tabpanel" aria-labelledby="tab-assets" class="pane" hidden>
+      <div class="group"><span class="label">Images</span>
+        <div class="asset-drops">
+          <label class="asset-drop" id="drop-hero" data-kind="hero" tabindex="0"><input type="file" accept="image/*" id="up-hero" class="visually-hidden"><span class="thumb" id="thumb-hero"></span><span><b>Product image</b><small>Drop or click</small></span><button type="button" class="icon-btn sm rm" id="rm-hero" aria-label="Remove product image" hidden><svg class="i"><use href="#i-x"/></svg></button></label>
+          <label class="asset-drop" id="drop-logo" data-kind="logo" tabindex="0"><input type="file" accept="image/*" id="up-logo" class="visually-hidden"><span class="thumb" id="thumb-logo"></span><span><b>Logo</b><small>PNG with transparency</small></span><button type="button" class="icon-btn sm rm" id="rm-logo" aria-label="Remove logo" hidden><svg class="i"><use href="#i-x"/></svg></button></label>
+        </div>
+      </div>
+      <div class="group"><span class="label">Colors</span><div class="swatches" id="swatches"></div></div>
+      <div class="group"><span class="label">Typeface</span>
+        <select id="brand-font" aria-label="Typeface"><option>Inter</option><option>Poppins</option><option>Montserrat</option><option>Space Grotesk</option><option>Playfair Display</option><option>DM Serif Display</option></select></div>
+      <div class="group"><span class="label">Copy</span><div id="copy-fields" class="fields"></div><p class="hint">Copy changes apply to every frame.</p></div>
+    </section>
+  </aside>
+
+  <!-- right: inspector -->
+  <aside id="right" class="panel right" aria-label="Inspector">
+    <div class="tabs" role="tablist" aria-label="Inspector">
+      <button role="tab" id="tab-design" aria-controls="pane-design" aria-selected="true">Design</button>
+      <button role="tab" id="tab-rules" aria-controls="pane-rules" aria-selected="false" tabindex="-1">Rules <span class="badge" id="rules-count">0</span></button>
+    </div>
+    <section id="pane-design" role="tabpanel" aria-labelledby="tab-design" class="pane"></section>
+    <section id="pane-rules" role="tabpanel" aria-labelledby="tab-rules" class="pane" hidden>
+      <form id="rule-form" class="rule-form" autocomplete="off">
+        <label for="rule-input" class="label">Describe a rule</label>
+        <div class="input-wrap"><svg class="i lead"><use href="#i-wand"/></svg><input id="rule-input" placeholder="e.g. logo top-left, hide offer on small banners" maxlength="500"><kbd>⌘K</kbd></div>
+        <div class="chips" id="examples" aria-label="Examples"><button type="button" class="chip">Logo top-left</button><button type="button" class="chip">Center the headline</button><button type="button" class="chip">Make the CTA bigger</button><button type="button" class="chip">Hide the offer on small banners</button></div>
+        <div id="parse-result" class="parse-result" aria-live="polite"></div>
+      </form>
+      <div class="group">
+        <div class="pane-head"><span class="label">Rule bubbles</span><span class="hint">Drag onto an element, or select one and click</span></div>
+        <div class="bubbles" id="bubbles"></div>
+      </div>
+      <div class="group">
+        <div class="pane-head"><span class="label">Campaign rules</span></div>
+        <ul id="rules-list" class="rules-list"></ul>
+        <div id="rules-empty" class="empty"><b>No rules yet</b><span>Drag an element on the canvas, use a bubble, or type a rule above.</span></div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- bottom tool dock -->
+  <div class="dock" role="toolbar" aria-label="Tools">
+    <button class="tool" id="tool-move" aria-pressed="true" aria-label="Move tool (V)" title="Move · V"><svg class="i"><use href="#i-move"/></svg></button>
+    <button class="tool" id="tool-hand" aria-pressed="false" aria-label="Hand tool (H)" title="Hand · H"><svg class="i"><use href="#i-hand"/></svg></button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="tool" id="zoom-out" aria-label="Zoom out" title="Zoom out · ⌘−"><svg class="i"><use href="#i-zoomOut"/></svg></button>
+    <button class="zoom-val" id="zoom-val" aria-haspopup="menu" aria-expanded="false" title="Zoom options">100%</button>
+    <div class="menu up" id="zoom-menu" role="menu" hidden>
+      <button role="menuitem" data-zoom="fit">Zoom to fit<kbd>⇧1</kbd></button>
+      <button role="menuitem" data-zoom="sel">Zoom to selection<kbd>⇧2</kbd></button>
+      <button role="menuitem" data-zoom="0.5">50%</button><button role="menuitem" data-zoom="1">100%<kbd>⌘0</kbd></button><button role="menuitem" data-zoom="2">200%</button>
+    </div>
+    <button class="tool" id="zoom-in" aria-label="Zoom in" title="Zoom in · ⌘+"><svg class="i"><use href="#i-zoomIn"/></svg></button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="dock-cmd" id="dock-cmd"><svg class="i"><use href="#i-wand"/></svg><span>Type a rule…</span><kbd>⌘K</kbd></button>
+  </div>
+
+  <div id="add-frame" class="popover" role="dialog" aria-label="Add frame" hidden>
+    <div class="pop-head"><b>Add frame</b><span class="hint">Click or drag onto the canvas</span></div>
+    <div id="preset-list" class="preset-list"></div>
+    <form id="custom-form" class="custom-form">
+      <span class="label">Custom size</span>
+      <div class="row3"><input id="custom-w" type="number" min="64" max="8192" value="600" aria-label="Width" required><span aria-hidden="true">×</span><input id="custom-h" type="number" min="64" max="8192" value="200" aria-label="Height" required></div>
+      <input id="custom-name" placeholder="Name (optional)" maxlength="40" aria-label="Frame name">
+      <button class="btn" type="submit">Add custom frame</button>
+    </form>
+  </div>
+
+  <button class="panel-toggle left-toggle" id="toggle-left" aria-controls="left" aria-expanded="false" aria-label="Show layers"><svg class="i"><use href="#i-layers"/></svg></button>
+  <button class="panel-toggle right-toggle" id="toggle-right" aria-controls="right" aria-expanded="false" aria-label="Show inspector"><svg class="i"><use href="#i-sparkle"/></svg></button>
+</div>
+
+<!-- ═════════════════════════ OVERLAYS ═════════════════════════ -->
+<div id="drop-overlay" class="drop-overlay" hidden><div><svg class="i xl"><use href="#i-upload"/></svg><b>Drop to add to your campaign</b><span>Photos become the product image, transparent or wide images become the logo. Drop on an element to replace it.</span></div></div>
+<div id="drag-ghost" class="drag-ghost" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<div id="tour" class="tour" role="dialog" aria-modal="false" aria-labelledby="tour-title" hidden>
+  <div class="tour-stage" id="tour-stage" aria-hidden="true"></div>
+  <div class="tour-body">
+    <div class="tour-meta"><span id="tour-step" class="label"></span><button class="icon-btn sm" id="tour-pause" aria-label="Pause animation" title="Pause animation"><svg class="i"><use href="#i-pause"/></svg></button></div>
+    <h2 id="tour-title"></h2>
+    <p id="tour-text"></p>
+    <p id="tour-try" class="tour-try"></p>
+    <div class="tour-dots" id="tour-dots" role="tablist" aria-label="Tour steps"></div>
+    <div class="tour-actions"><button class="btn ghost sm" id="tour-skip">Skip tour</button><span class="grow"></span><button class="btn sm" id="tour-back">Back</button><button class="btn primary sm" id="tour-next">Next</button></div>
+  </div>
+</div>
+<div id="tour-spot" class="tour-spot" hidden></div>
+
+<dialog id="shortcuts" class="modal" aria-labelledby="sc-title">
+  <div class="modal-head"><h2 id="sc-title">Keyboard shortcuts</h2><button class="icon-btn" id="sc-close" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="sc-grid">
+    <div><h3>Canvas</h3><dl>
+      <dt><kbd>V</kbd></dt><dd>Move tool</dd><dt><kbd>H</kbd> / hold <kbd>Space</kbd></dt><dd>Pan</dd>
+      <dt><kbd>⌘</kbd> + scroll</dt><dd>Zoom</dd><dt><kbd>⇧1</kbd></dt><dd>Zoom to fit</dd><dt><kbd>⇧2</kbd></dt><dd>Zoom to selection</dd><dt><kbd>⌘0</kbd></dt><dd>Zoom to 100%</dd></dl></div>
+    <div><h3>Editing</h3><dl>
+      <dt><kbd>Tab</kbd></dt><dd>Next element in frame</dd><dt><kbd>←↑→↓</kbd></dt><dd>Nudge (<kbd>⇧</kbd> = 10)</dd>
+      <dt><kbd>Delete</kbd></dt><dd>Hide in this frame</dd><dt><kbd>Esc</kbd></dt><dd>Deselect / undo pending</dd>
+      <dt><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></dt><dd>Undo / redo</dd></dl></div>
+    <div><h3>Campaign</h3><dl>
+      <dt><kbd>⌘K</kbd></dt><dd>Type a rule</dd><dt><kbd>⌘E</kbd></dt><dd>Export all</dd><dt><kbd>?</kbd></dt><dd>This sheet</dd></dl></div>
+  </div>
+</dialog>
+
+<dialog id="bench" class="modal" aria-labelledby="bench-title">
+  <div class="modal-head"><h2 id="bench-title">Transfer benchmark</h2><button class="icon-btn" id="bench-close" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div id="bench-out" class="bench-out"></div>
+</dialog>
+
+<script src="/assets/icons.js"></script>
+<script src="/assets/zip.js"></script>
+<script src="/assets/render.js"></script>
+<script src="/assets/core.js"></script>
+<script src="/assets/canvas.js"></script>
+<script src="/assets/panels.js"></script>
+<script src="/assets/dnd.js"></script>
+<script src="/assets/tour.js"></script>
+<script src="/assets/home.js"></script>
+<script src="/assets/silk.js"></script>
+</body>
+</html>

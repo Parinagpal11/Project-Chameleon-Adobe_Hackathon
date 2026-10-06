@@ -1,0 +1,120 @@
+{
+  "canvas": {
+    "width": 1080,
+    "height": 1080
+  },
+  "brand": {
+    "background": "#111114",
+    "text": "#f5f5f0",
+    "primary": "#d7ff3a",
+    "accent": "#ff5a36",
+    "font": "Space Grotesk"
+  },
+  "elements": [
+    {
+      "id": "logo",
+      "type": "logo",
+      "x": 80,
+      "y": 60,
+      "width": 240,
+      "height": 60,
+      "text": "STRIDE",
+      "genome": {
+        "role": "logo",
+        "importance": 0.88,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "x": 80,
+      "y": 160,
+      "width": 520,
+      "height": 220,
+      "text": "Run the city at night",
+      "fontSize": 72,
+      "genome": {
+        "role": "headline",
+        "importance": 1.0,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "subtitle",
+      "type": "text",
+      "x": 80,
+      "y": 400,
+      "width": 480,
+      "height": 80,
+      "text": "Reflective Nova 2 \u2014 limited drop",
+      "fontSize": 32,
+      "genome": {
+        "role": "subtitle",
+        "importance": 0.7,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "cta",
+      "type": "button",
+      "x": 80,
+      "y": 520,
+      "width": 260,
+      "height": 80,
+      "text": "Get early access",
+      "genome": {
+        "role": "cta",
+        "importance": 0.9,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "offer",
+      "type": "text",
+      "x": 80,
+      "y": 640,
+      "width": 360,
+      "height": 60,
+      "text": "Fri 7 PM \u00b7 500 pairs",
+      "fontSize": 30,
+      "genome": {
+        "role": "offer",
+        "importance": 0.82,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "hero",
+      "type": "image",
+      "x": 600,
+      "y": 120,
+      "width": 420,
+      "height": 800,
+      "art": "sneaker",
+      "genome": {
+        "role": "hero",
+        "importance": 0.95,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    }
+  ]
+}

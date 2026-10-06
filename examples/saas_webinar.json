@@ -1,0 +1,120 @@
+{
+  "canvas": {
+    "width": 1200,
+    "height": 628
+  },
+  "brand": {
+    "background": "#eef2ff",
+    "text": "#141a33",
+    "primary": "#3b5bfd",
+    "accent": "#c7d2fe",
+    "font": "Inter"
+  },
+  "elements": [
+    {
+      "id": "logo",
+      "type": "logo",
+      "x": 60,
+      "y": 40,
+      "width": 200,
+      "height": 50,
+      "text": "Northwind",
+      "genome": {
+        "role": "logo",
+        "importance": 0.88,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "x": 60,
+      "y": 120,
+      "width": 560,
+      "height": 180,
+      "text": "Ship dashboards your team trusts",
+      "fontSize": 56,
+      "genome": {
+        "role": "headline",
+        "importance": 1.0,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "offer",
+      "type": "text",
+      "x": 60,
+      "y": 320,
+      "width": 480,
+      "height": 50,
+      "text": "Free live webinar \u00b7 Oct 22",
+      "fontSize": 28,
+      "genome": {
+        "role": "offer",
+        "importance": 0.82,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "cta",
+      "type": "button",
+      "x": 60,
+      "y": 400,
+      "width": 220,
+      "height": 64,
+      "text": "Save my seat",
+      "genome": {
+        "role": "cta",
+        "importance": 0.9,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "legal",
+      "type": "text",
+      "x": 60,
+      "y": 540,
+      "width": 520,
+      "height": 30,
+      "text": "45 min \u00b7 Recording sent to all registrants",
+      "fontSize": 16,
+      "genome": {
+        "role": "legal",
+        "importance": 0.8,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "hero",
+      "type": "image",
+      "x": 660,
+      "y": 60,
+      "width": 480,
+      "height": 500,
+      "art": "screen",
+      "genome": {
+        "role": "hero",
+        "importance": 0.95,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "canvas": {
+    "width": 1080,
+    "height": 1080
+  },
+  "elements": [
+    {
+      "id": "logo",
+      "type": "logo",
+      "x": 90,
+      "y": 50,
+      "width": 260,
+      "height": 70,
+      "genome": {
+        "role": "logo",
+        "importance": 0.88,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      },
+      "text": "ROAST & CO."
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "text": "BREW A LITTLE JOY",
+      "x": 90,
+      "y": 130,
+      "width": 700,
+      "height": 110,
+      "fontSize": 48,
+      "genome": {
+        "role": "headline",
+        "importance": 1.0,
+        "removable": false,
+        "scalable": true,
+        "reflow": true,
+        "relationships": []
+      }
+    },
+    {
+      "id": "offer",
+      "type": "text",
+      "text": "UP TO 50% OFF",
+      "x": 95,
+      "y": 470,
+      "width": 360,
+      "height": 70,
+      "fontSize": 38,
+      "genome": {
+        "role": "offer",
+        "importance": 0.82,
+        "removable": false,
+        "scalable": true,
+        "reflow": true,
+        "relationships": []
+      }
+    },
+    {
+      "id": "hero",
+      "type": "image",
+      "x": 560,
+      "y": 200,
+      "width": 430,
+      "height": 650,
+      "genome": {
+        "role": "hero",
+        "importance": 0.95,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      },
+      "art": "cup"
+    },
+    {
+      "id": "cta",
+      "type": "button",
+      "text": "SHOP NOW",
+      "x": 100,
+      "y": 300,
+      "width": 280,
+      "height": 75,
+      "genome": {
+        "role": "cta",
+        "importance": 0.9,
+        "removable": false,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    },
+    {
+      "id": "sparkle",
+      "type": "decoration",
+      "x": 400,
+      "y": 760,
+      "width": 120,
+      "height": 120,
+      "genome": {
+        "role": "decoration",
+        "importance": 0.2,
+        "removable": true,
+        "scalable": true,
+        "reflow": false,
+        "relationships": []
+      }
+    }
+  ],
+  "brand": {
+    "background": "#e6b56e",
+    "text": "#2b1d14",
+    "primary": "#26402f",
+    "accent": "#cc874e",
+    "font": "Inter"
+  }
+}
