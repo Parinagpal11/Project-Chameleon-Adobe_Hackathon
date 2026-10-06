@@ -1,0 +1,193 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "App download, landscape",
+  "page": {
+    "width": 1600,
+    "height": 900,
+    "background": "#F5F3FF"
+  },
+  "nodes": [
+    {
+      "id": "halo",
+      "type": "shape",
+      "shape": "ellipse",
+      "box": [
+        160,
+        120,
+        660,
+        660
+      ],
+      "style": {
+        "fill": "#DDD6FE"
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "phone",
+      "type": "image",
+      "box": [
+        330,
+        90,
+        330,
+        720
+      ],
+      "style": {
+        "fill": "#4C1D95",
+        "radius": 40
+      },
+      "subject": [
+        0.05,
+        0.05,
+        0.9,
+        0.9
+      ],
+      "meta": {
+        "label": "app screenshot"
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        820,
+        230,
+        680,
+        168.0
+      ],
+      "text": "Plan trips with friends",
+      "style": {
+        "fontSize": 80,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#2E1065",
+        "align": "left",
+        "lineHeight": 1.05
+      }
+    },
+    {
+      "id": "body",
+      "type": "text",
+      "box": [
+        820,
+        440,
+        640,
+        34.5
+      ],
+      "text": "Shared itineraries, split costs, one app.",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#4C1D95",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "ios-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        820,
+        540,
+        230,
+        76
+      ],
+      "style": {
+        "fill": "#111111",
+        "radius": 14
+      }
+    },
+    {
+      "id": "ios",
+      "type": "text",
+      "box": [
+        836,
+        559,
+        198,
+        36.8
+      ],
+      "text": "App Store",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "and-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        1070,
+        540,
+        230,
+        76
+      ],
+      "style": {
+        "fill": "#111111",
+        "radius": 14
+      }
+    },
+    {
+      "id": "and",
+      "type": "text",
+      "box": [
+        1086,
+        559,
+        198,
+        36.8
+      ],
+      "text": "Google Play",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "stores",
+      "type": "group",
+      "children": [
+        "ios-bg",
+        "ios",
+        "and-bg",
+        "and"
+      ]
+    },
+    {
+      "id": "rating",
+      "type": "text",
+      "box": [
+        820,
+        650,
+        500,
+        29.9
+      ],
+      "text": "4.8 ★ from 12,000 reviews",
+      "style": {
+        "fontSize": 26,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#6D28D9",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "medium",
+    "tags": [
+      "split",
+      "device",
+      "badges"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

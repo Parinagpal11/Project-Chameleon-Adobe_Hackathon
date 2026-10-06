@@ -1,0 +1,176 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Summer sale banner",
+  "page": {
+    "width": 1200,
+    "height": 628,
+    "background": "#FFE45C"
+  },
+  "nodes": [
+    {
+      "id": "sun",
+      "type": "shape",
+      "shape": "ellipse",
+      "box": [
+        860,
+        -160,
+        520,
+        520
+      ],
+      "style": {
+        "fill": "#FFC93C"
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        70,
+        80,
+        560,
+        50.6
+      ],
+      "text": "Summer sale",
+      "style": {
+        "fontSize": 44,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#1B1B1B",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "offer",
+      "type": "text",
+      "box": [
+        70,
+        140,
+        600,
+        150.0
+      ],
+      "text": "50% OFF",
+      "style": {
+        "fontSize": 150,
+        "fontWeight": 800,
+        "fontFamily": "Montserrat",
+        "color": "#1B1B1B",
+        "align": "left",
+        "lineHeight": 1.0
+      }
+    },
+    {
+      "id": "body",
+      "type": "text",
+      "box": [
+        70,
+        310,
+        520,
+        29.9
+      ],
+      "text": "On every pair of sandals, this weekend only.",
+      "style": {
+        "fontSize": 26,
+        "fontWeight": 500,
+        "fontFamily": "Inter",
+        "color": "#333333",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        70,
+        390,
+        240,
+        70
+      ],
+      "style": {
+        "fill": "#1B1B1B",
+        "radius": 35.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        82,
+        409.5,
+        216,
+        31.0
+      ],
+      "text": "Shop the sale",
+      "style": {
+        "fontSize": 27,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#ffffff",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    },
+    {
+      "id": "product",
+      "type": "image",
+      "box": [
+        700,
+        110,
+        440,
+        420
+      ],
+      "style": {
+        "fill": "#E07A5F",
+        "radius": 0
+      },
+      "subject": [
+        0.15,
+        0.2,
+        0.7,
+        0.6
+      ],
+      "meta": {
+        "label": "sandal"
+      }
+    },
+    {
+      "id": "legal",
+      "type": "text",
+      "box": [
+        70,
+        570,
+        700,
+        18.4
+      ],
+      "text": "*Selected styles. Valid until Sunday 11:59 PM. While stocks last.",
+      "style": {
+        "fontSize": 16,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#555555",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "medium",
+    "tags": [
+      "offer",
+      "product",
+      "legal"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

@@ -1,0 +1,92 @@
+/* Chameleon X-ray — shows what the Understand stage found. Uses the studio's tokens from app.css. */
+body.xr { overflow: auto; min-height: 100%; }
+.xr-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.xr-brand { display: flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
+.xr-mark { width: 22px; height: 22px; border-radius: 7px; background: conic-gradient(from 200deg, #7152f0, #22c55e, #f59e0b, #ef4444, #7152f0); }
+.xr-sub { padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 12px; }
+.xr-spacer { flex: 1; }
+.xr-pick select { height: 36px; min-width: 220px; max-width: 42vw; padding: 0 30px 0 10px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--text); appearance: none; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 16px, calc(100% - 10px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+.xr-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 500; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.xr-btn:hover { background: var(--surface-3); }
+.xr-btn.ghost { background: transparent; border-color: transparent; }
+.xr-btn.ghost:hover { background: var(--hover); }
+.xr-btn.icon { width: 36px; padding: 0; justify-content: center; }
+.xr-btn:focus-within, .xr-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xr-btn .i, .xr-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+.xr-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; height: calc(100vh - 56px); }
+.xr-stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; min-height: 0;
+  background: var(--canvas); border-radius: var(--r-xl); padding: 14px;
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; }
+.xr-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+.xr-meta strong { color: var(--text); font-size: 14px; margin-right: 6px; }
+.xr-pill { padding: 2px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.xr-art { position: relative; justify-self: center; align-self: center; box-shadow: var(--frame-shadow); line-height: 0; }
+.xr-overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.xr-toggles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; border: 0; margin: 0; padding: 0; }
+.xr-toggle { position: relative; }
+.xr-toggle input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.xr-toggle span { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--muted); font-weight: 500; user-select: none; transition: all var(--dur-fast) var(--ease); }
+.xr-toggle span::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--swatch, var(--accent)); opacity: .35; }
+.xr-toggle input:checked + span { color: var(--text); border-color: var(--swatch, var(--accent)); background: var(--surface-2); }
+.xr-toggle input:checked + span::before { opacity: 1; }
+.xr-toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.xr-panel { display: flex; flex-direction: column; gap: 12px; overflow: auto; min-height: 0; padding-right: 2px; }
+.xr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; }
+.xr-card h2 { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .01em; display: flex; align-items: center; gap: 6px; }
+.xr-count { color: var(--faint); font-weight: 500; }
+.xr-hint { margin: -2px 0 10px; color: var(--faint); font-size: 12px; }
+.xr-notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.xr-notes li { position: relative; padding-left: 16px; color: var(--text); }
+.xr-notes li::before { content: ''; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.xr-groups { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; counter-reset: g; }
+.xr-group { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; text-align: left;
+  padding: 7px 8px; border-radius: var(--r); border: 1px solid transparent; background: transparent; }
+.xr-group:hover, .xr-group:focus-visible, .xr-group.on { background: var(--surface-2); border-color: var(--line-2); outline: none; }
+.xr-group .n { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 11px; }
+.xr-group .t { min-width: 0; }
+.xr-group .t b { display: block; font-weight: 600; }
+.xr-group .t small { display: block; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xr-group .a { color: var(--muted); font-size: 11px; text-align: right; }
+.xr-tiers { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.xr-tier { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.xr-tier:last-child { border-bottom: 0; }
+.xr-shape { display: grid; place-items: center; width: 44px; height: 36px; }
+.xr-shape i { display: block; border: 1.5px solid var(--muted); border-radius: 2px; background: var(--surface-2); }
+.xr-tier b { display: block; font-weight: 600; }
+.xr-tier small { display: block; color: var(--faint); }
+.xr-badge { padding: 3px 9px; border-radius: 999px; font-weight: 700; font-size: 11px; white-space: nowrap; }
+.xr-badge.t1 { background: var(--ok-soft); color: var(--ok); }
+.xr-badge.t2 { background: var(--warn-soft); color: var(--warn); }
+.xr-badge.t3 { background: var(--bad-soft); color: var(--bad); }
+.xr-error { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 14px; border-radius: var(--r); background: var(--bad); color: #fff; box-shadow: var(--shadow); }
+
+/* overlay drawing (SVG). Sizes are set in JS in page units so they stay crisp at any zoom. */
+.xr-overlay .grp rect.box { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-dasharray: 6 4; }
+.xr-overlay .grp.on rect.box { stroke-width: 3; stroke-dasharray: none; }
+.xr-overlay .grp rect.fill { opacity: 0; transition: opacity var(--dur) var(--ease); }
+.xr-overlay .grp.on rect.fill { opacity: .14; }
+.xr-overlay .dim { fill: #000; opacity: .38; }
+.xr-overlay line, .xr-overlay polyline, .xr-overlay path { vector-effect: non-scaling-stroke; }
+.xr-overlay text { font-family: Inter, system-ui, sans-serif; font-weight: 700; }
+
+@media (max-width: 920px) {
+  .xr-main { grid-template-columns: 1fr; height: auto; }
+  .xr-stage { min-height: 60vh; }
+  .xr-top { gap: 6px; padding: 0 10px; }
+  .xr-pick { flex: 1; min-width: 0; }
+  .xr-pick select { min-width: 0; width: 100%; max-width: none; }
+  .xr-brand strong, .xr-spacer { display: none; }
+  .xr-sub, .xr-btn span:not([id]) { display: none; }
+  .xr-btn span[id] + span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

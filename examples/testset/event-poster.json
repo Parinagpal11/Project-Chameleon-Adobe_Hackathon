@@ -1,0 +1,281 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Design meetup poster",
+  "page": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#151515"
+  },
+  "nodes": [
+    {
+      "id": "date-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        80,
+        80,
+        220,
+        110
+      ],
+      "style": {
+        "fill": "#FF5A36",
+        "radius": 12
+      }
+    },
+    {
+      "id": "date",
+      "type": "text",
+      "box": [
+        100,
+        105,
+        180,
+        57.5
+      ],
+      "text": "OCT 24",
+      "style": {
+        "fontSize": 50,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "date-badge",
+      "type": "group",
+      "children": [
+        "date-bg",
+        "date"
+      ]
+    },
+    {
+      "id": "eyebrow",
+      "type": "text",
+      "box": [
+        80,
+        270,
+        600,
+        34.5
+      ],
+      "text": "ISU DESIGN NIGHT",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FF5A36",
+        "align": "left",
+        "lineHeight": 1.15,
+        "letterSpacing": 3
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        80,
+        320,
+        920,
+        360.0
+      ],
+      "text": "Make it bend, not break",
+      "style": {
+        "fontSize": 120,
+        "fontWeight": 800,
+        "fontFamily": "Space Grotesk",
+        "color": "#FFFFFF",
+        "align": "left",
+        "lineHeight": 1.0
+      }
+    },
+    {
+      "id": "details",
+      "type": "text",
+      "box": [
+        80,
+        700,
+        700,
+        36.8
+      ],
+      "text": "6:30 PM · Student Innovation Center 1118",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 500,
+        "fontFamily": "Inter",
+        "color": "#CCCCCC",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "rule",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        80,
+        770,
+        920,
+        3
+      ],
+      "style": {
+        "fill": "#333333",
+        "radius": 0
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "sp1",
+      "type": "image",
+      "box": [
+        80,
+        820,
+        280,
+        280
+      ],
+      "style": {
+        "fill": "#6B5B95",
+        "radius": 140
+      },
+      "subject": [
+        0.25,
+        0.1,
+        0.5,
+        0.6
+      ],
+      "meta": {
+        "label": "speaker"
+      }
+    },
+    {
+      "id": "sp1-name",
+      "type": "text",
+      "box": [
+        80,
+        1115,
+        280,
+        32.2
+      ],
+      "text": "Maya Chen",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "sp2",
+      "type": "image",
+      "box": [
+        400,
+        820,
+        280,
+        280
+      ],
+      "style": {
+        "fill": "#88B04B",
+        "radius": 140
+      },
+      "subject": [
+        0.25,
+        0.1,
+        0.5,
+        0.6
+      ],
+      "meta": {
+        "label": "speaker"
+      }
+    },
+    {
+      "id": "sp2-name",
+      "type": "text",
+      "box": [
+        400,
+        1115,
+        280,
+        32.2
+      ],
+      "text": "Leo Park",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "sp3",
+      "type": "image",
+      "box": [
+        720,
+        820,
+        280,
+        280
+      ],
+      "style": {
+        "fill": "#F7CAC9",
+        "radius": 140
+      },
+      "subject": [
+        0.25,
+        0.1,
+        0.5,
+        0.6
+      ],
+      "meta": {
+        "label": "speaker"
+      }
+    },
+    {
+      "id": "sp3-name",
+      "type": "text",
+      "box": [
+        720,
+        1115,
+        280,
+        32.2
+      ],
+      "text": "Ava Ruiz",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "legal",
+      "type": "text",
+      "box": [
+        80,
+        1260,
+        920,
+        23.0
+      ],
+      "text": "Free entry. RSVP required; seats are limited. Terms apply.",
+      "style": {
+        "fontSize": 20,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#888888",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "medium",
+    "tags": [
+      "poster",
+      "many-elements",
+      "repeated-cards"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

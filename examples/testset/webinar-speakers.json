@@ -1,0 +1,260 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Webinar with two speakers",
+  "page": {
+    "width": 1600,
+    "height": 900,
+    "background": "#0B1020"
+  },
+  "nodes": [
+    {
+      "id": "logo",
+      "type": "image",
+      "box": [
+        90,
+        70,
+        180,
+        54
+      ],
+      "style": {
+        "fill": "#FFFFFF",
+        "radius": 0
+      },
+      "role": "logo",
+      "meta": {
+        "label": "logo"
+      }
+    },
+    {
+      "id": "eyebrow",
+      "type": "text",
+      "box": [
+        90,
+        230,
+        500,
+        32.2
+      ],
+      "text": "LIVE WEBINAR",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#7DD3FC",
+        "align": "left",
+        "lineHeight": 1.15,
+        "letterSpacing": 3
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        90,
+        280,
+        760,
+        233.3
+      ],
+      "text": "Scaling design systems without the chaos",
+      "style": {
+        "fontSize": 72,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "left",
+        "lineHeight": 1.08
+      }
+    },
+    {
+      "id": "details",
+      "type": "text",
+      "box": [
+        90,
+        560,
+        700,
+        34.5
+      ],
+      "text": "Thursday, Nov 6 · 11 AM CT · 45 min",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 500,
+        "fontFamily": "Inter",
+        "color": "#CBD5E1",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        90,
+        640,
+        300,
+        80
+      ],
+      "style": {
+        "fill": "#38BDF8",
+        "radius": 40.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        102,
+        662.8,
+        276,
+        34.5
+      ],
+      "text": "Save my seat",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#0B1020",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    },
+    {
+      "id": "sp1",
+      "type": "image",
+      "box": [
+        980,
+        200,
+        240,
+        300
+      ],
+      "style": {
+        "fill": "#334155",
+        "radius": 20
+      },
+      "subject": [
+        0.2,
+        0.05,
+        0.6,
+        0.6
+      ],
+      "meta": {
+        "label": "speaker"
+      }
+    },
+    {
+      "id": "sp1-name",
+      "type": "text",
+      "box": [
+        980,
+        520,
+        240,
+        32.2
+      ],
+      "text": "Jordan Lee",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "sp1-role",
+      "type": "text",
+      "box": [
+        980,
+        556,
+        240,
+        25.3
+      ],
+      "text": "Staff designer",
+      "style": {
+        "fontSize": 22,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#94A3B8",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "sp2",
+      "type": "image",
+      "box": [
+        1260,
+        200,
+        240,
+        300
+      ],
+      "style": {
+        "fill": "#475569",
+        "radius": 20
+      },
+      "subject": [
+        0.2,
+        0.05,
+        0.6,
+        0.6
+      ],
+      "meta": {
+        "label": "speaker"
+      }
+    },
+    {
+      "id": "sp2-name",
+      "type": "text",
+      "box": [
+        1260,
+        520,
+        240,
+        32.2
+      ],
+      "text": "Sam Ortiz",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "sp2-role",
+      "type": "text",
+      "box": [
+        1260,
+        556,
+        240,
+        25.3
+      ],
+      "text": "Eng manager",
+      "style": {
+        "fontSize": 22,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#94A3B8",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "medium",
+    "tags": [
+      "split",
+      "repeated-cards",
+      "left-aligned"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

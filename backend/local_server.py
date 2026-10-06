@@ -7,6 +7,8 @@ from models import (TransformRequest, BatchRequest, InferRequest, LearnEditReque
                     AddRuleRequest, RulePatch, ParseRuleRequest, ProjectSave)
 from engine.intent import infer_edit, infer_any
 from engine.rules import parse_text
+from engine.understand import analyze
+from engine.plan import EVAL_SIZES
 import service
 
 MAX_BODY = 15_000_000
@@ -57,7 +59,10 @@ class Handler(BaseHTTPRequestHandler):
                 if p == '/benchmark':
                     from benchmark import run_benchmark
                     return self.send(200, run_benchmark())
+                if p == '/testset': return self.send(200, {'designs': service.testset_index(), 'sizes': EVAL_SIZES})
+                if p.startswith('/testset/'): return self.send(200, service.testset_design(p[9:]))
                 if p == '/': file = service.ROOT / 'frontend' / 'index.html'
+                elif p == '/xray': file = service.ROOT / 'frontend' / 'xray.html'
                 elif p == '/example':
                     name = q.get('name', ['coffee_ad'])[0]
                     if name not in service.TEMPLATES: return self.send(404, {'detail': 'Unknown template'})
@@ -93,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
                     req = AddRuleRequest.model_validate(data)
                     r = req.rule
                     result = service.add_rule(req.campaign, r.type, r.params, r.label, r.source, r.evidence)
+                elif p == '/analyze':
+                    result = service.analyze_request(data)
                 elif p == '/parse-rule':
                     req = ParseRuleRequest.model_validate(data)
                     result = parse_text(req.text, req.roles)

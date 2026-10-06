@@ -12,21 +12,21 @@ Team: **Pari Nagpal**, **Priyanshu**, **Anwar** (Iowa State University).
 
 ## Week 1 — Oct 6–12: understand the design
 - [ ] Read the official Hub brief; adapt the input format and tier definitions (all)
-- [ ] Design-graph schema: page, nodes (text, image, shape, group, background), styles, layers (A)
-- [ ] Importer from the current Chameleon JSON + the brief's format (A)
-- [ ] Understand stage: groups, grid lines, margins, anchors, reading order (A)
-- [ ] Photo subject detection with OpenCV saliency/faces (B)
+- [x] Design-graph schema: page, nodes (text, image, shape, group, background), styles, layers (A) — `engine/graph.py`, docs/ENGINE.md
+- [ ] Importer from the current Chameleon JSON + the brief's format (A) — studio JSON done; brief format waiting on the Hub
+- [x] Understand stage: groups, grid lines, margins, anchors, reading order, roles, repeats (A) — `engine/understand.py`
+- [x] Photo subject detection: given box → faces (OpenCV, optional) → saliency → centre (B) — `engine/subject.py`; tune on real photos
 - [ ] Font metrics with Pillow + bundled open fonts, shared with the browser (B)
-- [ ] Start the test set: 12 of 36 designs built in Express and exported (C)
-- [ ] X-ray overlay prototype that draws the analysis on the original (C)
+- [ ] Start the test set: 12 of 36 designs built in Express and exported (C) — 12 hand-laid seed designs in `examples/testset/`; replace/extend with real Express designs
+- [x] X-ray overlay prototype that draws the analysis on the original (C) — `/xray`
 
 ## Week 2 — Oct 13–19: adapt + first end-to-end
-- [ ] Plan stage: tier from aspect-ratio change (A)
+- [x] Plan stage: tier from aspect-ratio change (A) — `engine/plan.py`
 - [ ] Solve stage: constraint layout with kiwisolver, several candidates (A)
 - [ ] Tier strategies: scale/re-wrap (1), re-flow groups (2), rebuild by importance (3) (A)
 - [ ] Subject-aware crop + background extend (B)
 - [ ] Score: faithfulness, legibility, balance, overlap, off-canvas (B)
-- [ ] `POST /adapt` and `POST /analyze` (A)
+- [ ] `POST /adapt` and `POST /analyze` (A) — `/analyze` done
 - [ ] Judge mode: bring design → pick sizes → Stretch | Crop | Chameleon (C)
 - [ ] Test set at 24 designs (C)
 - [ ] **Milestone Oct 19:** every test design adapts to all 8 sizes end to end

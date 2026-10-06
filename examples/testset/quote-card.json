@@ -1,0 +1,120 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Customer quote card",
+  "page": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#EEF2FF"
+  },
+  "nodes": [
+    {
+      "id": "mark",
+      "type": "text",
+      "box": [
+        100,
+        90,
+        200,
+        260.0
+      ],
+      "text": "“",
+      "style": {
+        "fontSize": 260,
+        "fontWeight": 800,
+        "fontFamily": "DM Serif Display",
+        "color": "#C7D2FE",
+        "align": "left",
+        "lineHeight": 1.0
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "quote",
+      "type": "text",
+      "box": [
+        140,
+        300,
+        800,
+        259.2
+      ],
+      "text": "Chameleon cut our resize work from a day to ten minutes.",
+      "style": {
+        "fontSize": 54,
+        "fontWeight": 600,
+        "fontFamily": "DM Serif Display",
+        "color": "#1E1B4B",
+        "align": "center",
+        "lineHeight": 1.2
+      }
+    },
+    {
+      "id": "avatar",
+      "type": "image",
+      "box": [
+        330,
+        720,
+        96,
+        96
+      ],
+      "style": {
+        "fill": "#A5B4FC",
+        "radius": 48
+      },
+      "subject": [
+        0.2,
+        0.1,
+        0.6,
+        0.7
+      ],
+      "meta": {
+        "label": "avatar"
+      }
+    },
+    {
+      "id": "name",
+      "type": "text",
+      "box": [
+        446,
+        728,
+        360,
+        36.8
+      ],
+      "text": "Priya Desai",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#1E1B4B",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "box": [
+        446,
+        770,
+        360,
+        27.6
+      ],
+      "text": "Design lead, Northwind",
+      "style": {
+        "fontSize": 24,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#4338CA",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "simple",
+    "tags": [
+      "centred",
+      "quote",
+      "lockup"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

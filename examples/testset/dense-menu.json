@@ -1,0 +1,357 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Café menu, dense",
+  "page": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#1F2A24"
+  },
+  "nodes": [
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        90,
+        90,
+        900,
+        96.6
+      ],
+      "text": "Today at the café",
+      "style": {
+        "fontSize": 84,
+        "fontWeight": 800,
+        "fontFamily": "DM Serif Display",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "rule-top",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        90,
+        210,
+        900,
+        2
+      ],
+      "style": {
+        "fill": "#F2E8CF",
+        "radius": 0
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "item1",
+      "type": "text",
+      "box": [
+        90,
+        260,
+        600,
+        46.0
+      ],
+      "text": "Flat white",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price1",
+      "type": "text",
+      "box": [
+        790,
+        260,
+        200,
+        46.0
+      ],
+      "text": "$4.50",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "item2",
+      "type": "text",
+      "box": [
+        90,
+        380,
+        600,
+        46.0
+      ],
+      "text": "Cardamom bun",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price2",
+      "type": "text",
+      "box": [
+        790,
+        380,
+        200,
+        46.0
+      ],
+      "text": "$3.75",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "item3",
+      "type": "text",
+      "box": [
+        90,
+        500,
+        600,
+        46.0
+      ],
+      "text": "Avocado toast",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price3",
+      "type": "text",
+      "box": [
+        790,
+        500,
+        200,
+        46.0
+      ],
+      "text": "$9.00",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "item4",
+      "type": "text",
+      "box": [
+        90,
+        620,
+        600,
+        46.0
+      ],
+      "text": "Matcha latte",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price4",
+      "type": "text",
+      "box": [
+        790,
+        620,
+        200,
+        46.0
+      ],
+      "text": "$5.25",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "item5",
+      "type": "text",
+      "box": [
+        90,
+        740,
+        600,
+        46.0
+      ],
+      "text": "Granola bowl",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price5",
+      "type": "text",
+      "box": [
+        790,
+        740,
+        200,
+        46.0
+      ],
+      "text": "$7.50",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "item6",
+      "type": "text",
+      "box": [
+        90,
+        860,
+        600,
+        46.0
+      ],
+      "text": "Iced tea",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "price6",
+      "type": "text",
+      "box": [
+        790,
+        860,
+        200,
+        46.0
+      ],
+      "text": "$3.00",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#E9C46A",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "rule-bottom",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        90,
+        1010,
+        900,
+        2
+      ],
+      "style": {
+        "fill": "#F2E8CF",
+        "radius": 0
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "note",
+      "type": "text",
+      "box": [
+        90,
+        1060,
+        900,
+        34.5
+      ],
+      "text": "Oat milk free on Mondays.",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 500,
+        "fontFamily": "Inter",
+        "color": "#CAD2C5",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "logo",
+      "type": "text",
+      "box": [
+        90,
+        1220,
+        400,
+        39.1
+      ],
+      "text": "MOSS CAFÉ",
+      "style": {
+        "fontSize": 34,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#F2E8CF",
+        "align": "left",
+        "lineHeight": 1.15,
+        "letterSpacing": 3
+      }
+    },
+    {
+      "id": "legal",
+      "type": "text",
+      "box": [
+        590,
+        1230,
+        400,
+        20.7
+      ],
+      "text": "Prices include tax. Menu may change.",
+      "style": {
+        "fontSize": 18,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#8A9A8F",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    }
+  ],
+  "meta": {
+    "level": "hard",
+    "tags": [
+      "dense",
+      "list",
+      "text-heavy"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

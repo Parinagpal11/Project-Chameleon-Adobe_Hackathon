@@ -54,6 +54,16 @@ def project(campaign: str): return run(service.get_project, campaign)
 def save(req: ProjectSave, campaign: str): return run(service.save_project, campaign, req)
 @app.delete('/project')
 def drop(campaign: str): return run(service.delete_project, campaign)
+@app.post('/analyze')
+def analyze(data: dict): return run(service.analyze_request, data)
+@app.get('/testset')
+def testset():
+    from engine.plan import EVAL_SIZES
+    return {'designs': service.testset_index(), 'sizes': EVAL_SIZES}
+@app.get('/testset/{design_id}')
+def testset_design(design_id: str): return run(service.testset_design, design_id)
+@app.get('/xray')
+def xray(): return FileResponse(service.ROOT / 'frontend' / 'xray.html')
 @app.get('/benchmark')
 def benchmark():
     from benchmark import run_benchmark

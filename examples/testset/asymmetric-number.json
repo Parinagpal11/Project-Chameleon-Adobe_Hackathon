@@ -1,0 +1,177 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "48-hour flash, asymmetric",
+  "page": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#111827"
+  },
+  "nodes": [
+    {
+      "id": "stripe",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        0,
+        640,
+        1080,
+        18
+      ],
+      "style": {
+        "fill": "#F43F5E",
+        "radius": 0
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "product",
+      "type": "image",
+      "box": [
+        70,
+        80,
+        360,
+        420
+      ],
+      "style": {
+        "fill": "#9CA3AF",
+        "radius": 24
+      },
+      "subject": [
+        0.1,
+        0.1,
+        0.8,
+        0.8
+      ],
+      "meta": {
+        "label": "headphones"
+      }
+    },
+    {
+      "id": "number",
+      "type": "text",
+      "box": [
+        480,
+        60,
+        560,
+        300.0
+      ],
+      "text": "48h",
+      "style": {
+        "fontSize": 300,
+        "fontWeight": 800,
+        "fontFamily": "Space Grotesk",
+        "color": "#F43F5E",
+        "align": "right",
+        "lineHeight": 1.0
+      }
+    },
+    {
+      "id": "offer",
+      "type": "text",
+      "box": [
+        520,
+        400,
+        520,
+        59.8
+      ],
+      "text": "30% off all audio",
+      "style": {
+        "fontSize": 52,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#FFFFFF",
+        "align": "right",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        70,
+        720,
+        800,
+        92.0
+      ],
+      "text": "Flash sale",
+      "style": {
+        "fontSize": 80,
+        "fontWeight": 800,
+        "fontFamily": "Space Grotesk",
+        "color": "#FFFFFF",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "body",
+      "type": "text",
+      "box": [
+        70,
+        830,
+        760,
+        34.5
+      ],
+      "text": "Ends Sunday at midnight. No code needed.",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#D1D5DB",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        70,
+        920,
+        260,
+        76
+      ],
+      "style": {
+        "fill": "#F43F5E",
+        "radius": 38.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        82,
+        941.4,
+        236,
+        33.3
+      ],
+      "text": "Shop audio",
+      "style": {
+        "fontSize": 29,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#ffffff",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    }
+  ],
+  "meta": {
+    "level": "medium",
+    "tags": [
+      "asymmetric",
+      "big-type",
+      "product"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

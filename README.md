@@ -2,7 +2,7 @@
 
 **Adobe University Hackathon 2026 · Iowa State University · Pari Nagpal, Priyanshu, Anwar.** Chameleon takes an existing design and reshapes it for a new canvas size so it still looks intentionally designed: not stretched, not badly cropped. Fix one size once and every other size follows.
 
-> **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). The design-preserving engine described in [docs/STRATEGY.md](docs/STRATEGY.md) is being built now. Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
+> **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). Engine v2 has started. The **Understand** stage reads groups, roles, grid, anchors, reading order and photo subjects, and you can see it at **http://127.0.0.1:8000/xray** (details in [docs/ENGINE.md](docs/ENGINE.md)). Solve and Score come next, following [docs/STRATEGY.md](docs/STRATEGY.md). Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
 
 ## Repository map
 
@@ -10,9 +10,10 @@
 |---|---|
 | `backend/` | Python engine (`engine/`), service layer, HTTP server |
 | `frontend/` | Companion tool: vanilla JS + Canvas, no build step |
-| `examples/` | Sample designs (becomes the 36-design tiered test set) |
+| `examples/` | Studio samples; `examples/testset/` holds the tiered test set (12 seed designs, target 36) |
+| `tools/` | Scripts, for example regenerating the seed test set |
 | `tests/` | Unit, HTTP and browser (Playwright) tests |
-| `docs/` | Strategy, build plan |
+| `docs/` | Strategy, build plan, engine notes |
 | `design-system/` | UI tokens and rules for the companion tool |
 | `benchmarks/`, `previews/` | Current benchmark output and screenshots |
 
@@ -84,12 +85,14 @@ Rules are keyed by semantic **role** (headline, offer, CTA, logo, image, legal�
 - `backend/local_server.py`: the default HTTP server. `backend/main.py` is an optional FastAPI adapter that hasn't been integration-tested.
 - `frontend/`: `index.html`, `app.css` (light/dark tokens), `tour.css`, `silk.js` (animated ribbon behind the home screen), `icons.js` (SVG icons), `core.js` (state, sync, rules, history, projects, export), `canvas.js` (pan/zoom/select/drag), `panels.js` (layers, assets, inspector, rules), `dnd.js` (drag & drop), `tour.js` (animated tour and guides), `home.js`, `render.js`, `zip.js`.
 
-API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn` · `/parse-rule` · `GET|POST|DELETE /rules` · `PATCH|DELETE /rules/{id}` · `GET /projects` · `GET|PUT|DELETE /project?campaign=` · `GET /templates` · `GET /example?name=` · `GET /benchmark`
+Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
+
+Studio API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn` · `/parse-rule` · `GET|POST|DELETE /rules` · `PATCH|DELETE /rules/{id}` · `GET /projects` · `GET|PUT|DELETE /project?campaign=` · `GET /templates` · `GET /example?name=` · `GET /benchmark`
 
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v        # 25 tests
+python -m unittest discover -s tests -v        # 48 tests (3 browser tests skip without Playwright)
 ```
 
 `tests/test_ui_e2e.py` drives the real UI in Chromium. It covers dragging to learn a rule, undo/redo, ZIP export, frame-only tweaks, inspector rules, typed rules, bubble drag, adding frames, file drop and reopening a project. It skips itself unless Playwright is installed (`pip install playwright && python -m playwright install chromium`).

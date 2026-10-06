@@ -285,3 +285,48 @@ def delete_project(campaign):
         conn.execute('DELETE FROM projects WHERE campaign=?', (campaign,))
         conn.execute('DELETE FROM rules WHERE campaign=?', (campaign,))
     return {'status': 'deleted', 'campaign': campaign}
+
+
+# ---------------------------------------------------------------- Understand stage (engine v2)
+
+TESTSET = ROOT / 'examples' / 'testset'
+MAX_NODES = 300
+
+
+def testset_index():
+    f = TESTSET / 'index.json'
+    return json.loads(f.read_text()) if f.is_file() else []
+
+
+def testset_design(design_id):
+    if not re.fullmatch(r'[a-z0-9-]{1,60}', design_id or ''):
+        raise LookupError('Unknown test design')
+    f = TESTSET / f'{design_id}.json'
+    if not f.is_file():
+        raise LookupError('Unknown test design')
+    return json.loads(f.read_text())
+
+
+def analyze_request(data):
+    from engine.understand import analyze
+    from engine.plan import EVAL_SIZES
+    if not isinstance(data, dict) or not isinstance(data.get('design'), dict):
+        raise ValueError('Send {"design": {...}, "targets": [...]} (targets optional)')
+    design = data['design']
+    if len(design.get('nodes') or design.get('elements') or []) > MAX_NODES:
+        raise ValueError(f'Designs are limited to {MAX_NODES} nodes')
+    targets = data.get('targets')
+    if targets is None:
+        targets = EVAL_SIZES
+    if not isinstance(targets, list) or len(targets) > 30:
+        raise ValueError('targets must be a list of up to 30 sizes')
+    clean = []
+    for t in targets:
+        w, h = int(t.get('width', 0)), int(t.get('height', 0))
+        if not (16 <= w <= 8192 and 16 <= h <= 8192):
+            raise ValueError('Each target needs width and height between 16 and 8192')
+        clean.append({'name': str(t.get('name', ''))[:60], 'width': w, 'height': h})
+    try:
+        return analyze(design, clean)
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f'Malformed design: missing or wrong field {exc}')

@@ -1,0 +1,170 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Spring promo, centred",
+  "page": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#F4EFE6"
+  },
+  "nodes": [
+    {
+      "id": "blob-a",
+      "type": "shape",
+      "shape": "ellipse",
+      "box": [
+        -120,
+        -140,
+        420,
+        420
+      ],
+      "style": {
+        "fill": "#E9C9A8"
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "blob-b",
+      "type": "shape",
+      "shape": "ellipse",
+      "box": [
+        820,
+        800,
+        380,
+        380
+      ],
+      "style": {
+        "fill": "#CFE0C3"
+      },
+      "role": "decoration"
+    },
+    {
+      "id": "eyebrow",
+      "type": "text",
+      "box": [
+        340,
+        250,
+        400,
+        32.2
+      ],
+      "text": "NEW SEASON",
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#7A5C3E",
+        "align": "center",
+        "lineHeight": 1.15,
+        "letterSpacing": 4
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        140,
+        310,
+        800,
+        201.6
+      ],
+      "text": "Fresh picks for spring",
+      "style": {
+        "fontSize": 96,
+        "fontWeight": 800,
+        "fontFamily": "Playfair Display",
+        "color": "#2B1D14",
+        "align": "center",
+        "lineHeight": 1.05
+      }
+    },
+    {
+      "id": "subhead",
+      "type": "text",
+      "box": [
+        190,
+        530,
+        700,
+        39.1
+      ],
+      "text": "Seasonal bowls, made the morning you order.",
+      "style": {
+        "fontSize": 34,
+        "fontWeight": 500,
+        "fontFamily": "Inter",
+        "color": "#4A3A2E",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        400,
+        625,
+        280,
+        84
+      ],
+      "style": {
+        "fill": "#2B1D14",
+        "radius": 42.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        412,
+        648.6,
+        256,
+        36.8
+      ],
+      "text": "Order now",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#ffffff",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    },
+    {
+      "id": "logo",
+      "type": "text",
+      "box": [
+        440,
+        960,
+        200,
+        34.5
+      ],
+      "text": "GREENLY",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#2B1D14",
+        "align": "center",
+        "lineHeight": 1.15,
+        "letterSpacing": 3
+      }
+    }
+  ],
+  "meta": {
+    "level": "simple",
+    "tags": [
+      "centred",
+      "text-only",
+      "decoration"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

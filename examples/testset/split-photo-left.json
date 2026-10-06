@@ -1,0 +1,141 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Coffee launch, photo left",
+  "page": {
+    "width": 1200,
+    "height": 628,
+    "background": "#FFFFFF"
+  },
+  "nodes": [
+    {
+      "id": "photo",
+      "type": "image",
+      "box": [
+        0,
+        0,
+        600,
+        628
+      ],
+      "style": {
+        "fill": "#B98B5E",
+        "radius": 0
+      },
+      "subject": [
+        0.25,
+        0.2,
+        0.5,
+        0.65
+      ],
+      "meta": {
+        "label": "coffee cup"
+      }
+    },
+    {
+      "id": "logo",
+      "type": "image",
+      "box": [
+        1010,
+        40,
+        150,
+        48
+      ],
+      "style": {
+        "fill": "#1E1E1E",
+        "radius": 0
+      },
+      "role": "logo",
+      "meta": {
+        "label": "logo"
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        660,
+        170,
+        480,
+        126.0
+      ],
+      "text": "Brew a little joy",
+      "style": {
+        "fontSize": 60,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#1E1E1E",
+        "align": "left",
+        "lineHeight": 1.05
+      }
+    },
+    {
+      "id": "body",
+      "type": "text",
+      "box": [
+        660,
+        310,
+        470,
+        64.8
+      ],
+      "text": "Small-batch roasts delivered every two weeks.",
+      "style": {
+        "fontSize": 24,
+        "fontWeight": 400,
+        "fontFamily": "Inter",
+        "color": "#555555",
+        "align": "left",
+        "lineHeight": 1.35
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        660,
+        410,
+        220,
+        64
+      ],
+      "style": {
+        "fill": "#C8693B",
+        "radius": 32.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        672,
+        428.2,
+        196,
+        27.6
+      ],
+      "text": "Start trial",
+      "style": {
+        "fontSize": 24,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#ffffff",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    }
+  ],
+  "meta": {
+    "level": "simple",
+    "tags": [
+      "split",
+      "photo",
+      "left-aligned"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

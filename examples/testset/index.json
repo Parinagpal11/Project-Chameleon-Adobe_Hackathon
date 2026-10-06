@@ -1,0 +1,146 @@
+[
+  {
+    "id": "promo-centered",
+    "name": "Spring promo, centred",
+    "width": 1080,
+    "height": 1080,
+    "level": "simple",
+    "tags": [
+      "centred",
+      "text-only",
+      "decoration"
+    ]
+  },
+  {
+    "id": "split-photo-left",
+    "name": "Coffee launch, photo left",
+    "width": 1200,
+    "height": 628,
+    "level": "simple",
+    "tags": [
+      "split",
+      "photo",
+      "left-aligned"
+    ]
+  },
+  {
+    "id": "overlay-fullbleed",
+    "name": "Travel overlay, full-bleed photo",
+    "width": 1080,
+    "height": 1350,
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "photo",
+      "left-aligned"
+    ]
+  },
+  {
+    "id": "event-poster",
+    "name": "Design meetup poster",
+    "width": 1080,
+    "height": 1350,
+    "level": "medium",
+    "tags": [
+      "poster",
+      "many-elements",
+      "repeated-cards"
+    ]
+  },
+  {
+    "id": "sale-banner",
+    "name": "Summer sale banner",
+    "width": 1200,
+    "height": 628,
+    "level": "medium",
+    "tags": [
+      "offer",
+      "product",
+      "legal"
+    ]
+  },
+  {
+    "id": "quote-card",
+    "name": "Customer quote card",
+    "width": 1080,
+    "height": 1080,
+    "level": "simple",
+    "tags": [
+      "centred",
+      "quote",
+      "lockup"
+    ]
+  },
+  {
+    "id": "product-grid",
+    "name": "Three products grid",
+    "width": 1080,
+    "height": 1080,
+    "level": "hard",
+    "tags": [
+      "grid",
+      "repeated-cards",
+      "centred"
+    ]
+  },
+  {
+    "id": "webinar-speakers",
+    "name": "Webinar with two speakers",
+    "width": 1600,
+    "height": 900,
+    "level": "medium",
+    "tags": [
+      "split",
+      "repeated-cards",
+      "left-aligned"
+    ]
+  },
+  {
+    "id": "story-stacked",
+    "name": "Recipe story, stacked",
+    "width": 1080,
+    "height": 1920,
+    "level": "simple",
+    "tags": [
+      "stacked",
+      "photo",
+      "story"
+    ]
+  },
+  {
+    "id": "dense-menu",
+    "name": "Café menu, dense",
+    "width": 1080,
+    "height": 1350,
+    "level": "hard",
+    "tags": [
+      "dense",
+      "list",
+      "text-heavy"
+    ]
+  },
+  {
+    "id": "asymmetric-number",
+    "name": "48-hour flash, asymmetric",
+    "width": 1080,
+    "height": 1080,
+    "level": "medium",
+    "tags": [
+      "asymmetric",
+      "big-type",
+      "product"
+    ]
+  },
+  {
+    "id": "app-download",
+    "name": "App download, landscape",
+    "width": 1600,
+    "height": 900,
+    "level": "medium",
+    "tags": [
+      "split",
+      "device",
+      "badges"
+    ]
+  }
+]

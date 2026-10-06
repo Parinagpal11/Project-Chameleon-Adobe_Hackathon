@@ -1,0 +1,284 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Three products grid",
+  "page": {
+    "width": 1080,
+    "height": 1080,
+    "background": "#FAFAF7"
+  },
+  "nodes": [
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        80,
+        80,
+        920,
+        73.6
+      ],
+      "text": "This week’s bestsellers",
+      "style": {
+        "fontSize": 64,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#111111",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p1",
+      "type": "image",
+      "box": [
+        80,
+        250,
+        280,
+        340
+      ],
+      "style": {
+        "fill": "#D4A373",
+        "radius": 16
+      },
+      "subject": [
+        0.15,
+        0.15,
+        0.7,
+        0.7
+      ],
+      "meta": {
+        "label": "mug"
+      }
+    },
+    {
+      "id": "p1-name",
+      "type": "text",
+      "box": [
+        80,
+        610,
+        280,
+        34.5
+      ],
+      "text": "Stoneware mug",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#111111",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p1-price",
+      "type": "text",
+      "box": [
+        80,
+        650,
+        280,
+        34.5
+      ],
+      "text": "$24",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#BC4749",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p2",
+      "type": "image",
+      "box": [
+        400,
+        250,
+        280,
+        340
+      ],
+      "style": {
+        "fill": "#A3B18A",
+        "radius": 16
+      },
+      "subject": [
+        0.15,
+        0.15,
+        0.7,
+        0.7
+      ],
+      "meta": {
+        "label": "plant pot"
+      }
+    },
+    {
+      "id": "p2-name",
+      "type": "text",
+      "box": [
+        400,
+        610,
+        280,
+        34.5
+      ],
+      "text": "Clay planter",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#111111",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p2-price",
+      "type": "text",
+      "box": [
+        400,
+        650,
+        280,
+        34.5
+      ],
+      "text": "$32",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#BC4749",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p3",
+      "type": "image",
+      "box": [
+        720,
+        250,
+        280,
+        340
+      ],
+      "style": {
+        "fill": "#8D99AE",
+        "radius": 16
+      },
+      "subject": [
+        0.15,
+        0.15,
+        0.7,
+        0.7
+      ],
+      "meta": {
+        "label": "lamp"
+      }
+    },
+    {
+      "id": "p3-name",
+      "type": "text",
+      "box": [
+        720,
+        610,
+        280,
+        34.5
+      ],
+      "text": "Desk lamp",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 600,
+        "fontFamily": "Inter",
+        "color": "#111111",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "p3-price",
+      "type": "text",
+      "box": [
+        720,
+        650,
+        280,
+        34.5
+      ],
+      "text": "$58",
+      "style": {
+        "fontSize": 30,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#BC4749",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        390,
+        820,
+        300,
+        84
+      ],
+      "style": {
+        "fill": "#111111",
+        "radius": 42.0
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        402,
+        843.6,
+        276,
+        36.8
+      ],
+      "text": "Shop all",
+      "style": {
+        "fontSize": 32,
+        "fontWeight": 700,
+        "fontFamily": "Inter",
+        "color": "#ffffff",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    },
+    {
+      "id": "logo",
+      "type": "text",
+      "box": [
+        440,
+        980,
+        200,
+        29.9
+      ],
+      "text": "HOMEWARE CO",
+      "style": {
+        "fontSize": 26,
+        "fontWeight": 800,
+        "fontFamily": "Inter",
+        "color": "#111111",
+        "align": "center",
+        "lineHeight": 1.15,
+        "letterSpacing": 2
+      }
+    }
+  ],
+  "meta": {
+    "level": "hard",
+    "tags": [
+      "grid",
+      "repeated-cards",
+      "centred"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}
