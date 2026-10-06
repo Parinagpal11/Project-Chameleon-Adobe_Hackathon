@@ -92,7 +92,7 @@ Studio API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn`
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v        # 48 tests (3 browser tests skip without Playwright)
+python -m unittest discover -s tests -v        # 58 tests (7 browser tests skip without Playwright)
 ```
 
 `tests/test_ui_e2e.py` drives the real UI in Chromium. It covers dragging to learn a rule, undo/redo, ZIP export, frame-only tweaks, inspector rules, typed rules, bubble drag, adding frames, file drop and reopening a project. It skips itself unless Playwright is installed (`pip install playwright && python -m playwright install chromium`).

@@ -299,7 +299,7 @@ def testset_index():
 
 
 def testset_design(design_id):
-    if not re.fullmatch(r'[a-z0-9-]{1,60}', design_id or ''):
+    if not re.fullmatch(r'[a-z0-9-]{1,60}', design_id or '') or design_id == 'index':
         raise LookupError('Unknown test design')
     f = TESTSET / f'{design_id}.json'
     if not f.is_file():
@@ -313,7 +313,8 @@ def analyze_request(data):
     if not isinstance(data, dict) or not isinstance(data.get('design'), dict):
         raise ValueError('Send {"design": {...}, "targets": [...]} (targets optional)')
     design = data['design']
-    if len(design.get('nodes') or design.get('elements') or []) > MAX_NODES:
+    items = design.get('nodes') if 'nodes' in design else design.get('elements')
+    if isinstance(items, list) and len(items) > MAX_NODES:
         raise ValueError(f'Designs are limited to {MAX_NODES} nodes')
     targets = data.get('targets')
     if targets is None:
@@ -321,11 +322,16 @@ def analyze_request(data):
     if not isinstance(targets, list) or len(targets) > 30:
         raise ValueError('targets must be a list of up to 30 sizes')
     clean = []
-    for t in targets:
-        w, h = int(t.get('width', 0)), int(t.get('height', 0))
+    for i, t in enumerate(targets):
+        if not isinstance(t, dict):
+            raise ValueError(f'targets[{i}] must be an object like {{"width": 1080, "height": 1350}}')
+        try:
+            w, h = float(t.get('width')), float(t.get('height'))
+        except (TypeError, ValueError):
+            raise ValueError(f'targets[{i}] needs numeric width and height') from None
         if not (16 <= w <= 8192 and 16 <= h <= 8192):
             raise ValueError('Each target needs width and height between 16 and 8192')
-        clean.append({'name': str(t.get('name', ''))[:60], 'width': w, 'height': h})
+        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(w), 'height': int(h)})
     try:
         return analyze(design, clean)
     except (KeyError, TypeError) as exc:

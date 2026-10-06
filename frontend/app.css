@@ -408,3 +408,5 @@ input.project-name:focus { border-color: var(--accent); background: var(--surfac
 #silk-toggle { color: var(--muted); }
 @media (max-width: 700px) { .home-silk { opacity: .5; } #silk-toggle { display: none; } }
 a.btn { color: inherit; text-decoration: none; }
+@media (max-width: 560px) { .xray-link span { display: none; } .xray-link { width: 32px; padding: 0; } }
+@media (max-width: 360px) { .tour-link span { display: none; } .tour-link { width: 32px; padding: 0; } }

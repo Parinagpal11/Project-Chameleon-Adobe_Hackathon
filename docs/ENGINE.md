@@ -31,6 +31,8 @@ The new engine works in five stages: **Understand → Plan → Solve → Score �
 | `style` | Text: `fontSize`, `fontWeight`, `fontFamily`, `color`, `align`, `lineHeight`, `letterSpacing`. Shapes: `fill`, `radius`, `stroke`, `opacity`. |
 | `meta` | Free-form, for example `label` for placeholder photos. |
 
+**Limits and validation.** A design can have up to 300 nodes, and a request up to 30 targets of 16–8192 px. Numbers must be finite; `"40px"`, `"bold"` and `"centre"` are understood. Every bad input gets a 400 that names the node and the field. Group loops, self-groups and a node in two groups are rejected. Image `src` must be a `data:` URI: the server never opens file paths or URLs from a design. Images over 40 megapixels are refused, and photos are analysed on a copy of at most 800 px, cached per image.
+
 The studio's older ad JSON (`canvas` + `elements`) is still accepted. `engine/graph.py` converts it, and buttons become a group of a shape and a label. When the official brief names an input format, we add one importer into this graph. The engine itself stays the same.
 
 ## 2. Understand: what `analyze()` returns
@@ -46,7 +48,7 @@ The studio's older ad JSON (`canvas` + `elements`) is still accepted. `engine/gr
 | `grid` | Margins, shared alignment lines, dominant alignment | Margins ignore full-bleed elements. Text adds only the edge it is aligned to. |
 | `anchors` (per group) | `left`/`right`/`top`/`bottom`/`center-x`/`center-y`/`fill-x` | Distance to the margins. Groups that span margin to margin follow their own text alignment. |
 | `reading_order` | Group ids in the order a reader meets them | Recursive XY-cut: true columns first, then rows |
-| `subjects` | The part of each photo to keep (`page_box`) | Given box, then faces (OpenCV, optional), then spectral-residual saliency (Pillow/numpy), then a centre fallback |
+| `subjects` | The part of each photo to keep (`page_box`) | Given box, then faces (OpenCV), then saliency (colour contrast against the photo's border colour plus spectral residual; the strongest region, merged with equally strong or nearby regions), then a centre fallback when confidence is below 0.1 |
 | `style` | `structure` (overlay, split-horizontal, stacked, overlap, single), alignment, coverage, density | Hero vs headline-group geometry |
 | `notes` | The findings in plain English | Shown in the X-ray view and used later for "why" explanations |
 | `targets` | Per size: tier 1–3, strategy and reasons | `engine/plan.py` |

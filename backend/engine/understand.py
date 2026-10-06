@@ -41,6 +41,10 @@ def _words(text):
     return len((text or '').split())
 
 
+def _lines(t) -> int:
+    return max(1, round(t.box.h / (t.font_size * float(t.style.get('lineHeight') or 1.15))))
+
+
 class _DSU:
     def __init__(self, items):
         self.p = {i: i for i in items}
@@ -127,6 +131,12 @@ def infer_roles(g: Graph, layers: dict) -> dict:
     def strength(t): return t.font_size * (1 + (t.font_weight - 400) / 1000)
     candidates = [t for t in texts if t.id not in contained and t.id not in roles]
     given_head = next((t for t in texts if roles.get(t.id, {}).get('role') == 'headline'), None)
+    if not given_head and candidates:
+        top = max(t.font_size for t in candidates)
+        wordy = [t for t in candidates if not (OFFER_RE.search(t.text or '') and _words(t.text) <= 4)
+                 and not PRICE_ONLY_RE.search(t.text or '') and t.font_size >= top * .25]
+        if wordy and len(wordy) < len(candidates):
+            candidates = wordy      # "50% OFF" is the offer; the headline is the words around it
     head = given_head or (max(candidates, key=lambda t: (strength(t), -t.box.y)) if candidates else None)
     hs = head.font_size if head else max((t.font_size for t in texts), default=16)
     sizes = sorted(t.font_size for t in texts if t.id not in contained) or [16]
@@ -159,8 +169,11 @@ def infer_roles(g: Graph, layers: dict) -> dict:
         if t.id in roles or t.id in contained or t is head: continue
         tol = max(4.0, g.width * .01)
         for anchor in images + captions:
-            if anchor.box.x - tol <= t.box.x and t.box.r <= anchor.box.r + tol \
-                    and 0 <= t.box.y - anchor.box.b <= t.font_size * 1.6 and anchor.box.area / pa <= .2:
+            below = (anchor.box.x - tol <= t.box.x and t.box.r <= anchor.box.r + tol
+                     and 0 <= t.box.y - anchor.box.b <= t.font_size * 1.6 and anchor.box.area / pa <= .2)
+            beside = (anchor in images and anchor.box.area / pa <= .04 and 0 <= t.box.x - anchor.box.r <= anchor.box.w * .6
+                      and anchor.box.y - tol <= t.box.y and t.box.b <= anchor.box.b + tol)
+            if below or beside:
                 captions.append(t); break
     for t in captions:
         put(t.id, 'price' if PRICE_ONLY_RE.search(t.text or '') else 'caption', conf=.65)
@@ -178,7 +191,7 @@ def infer_roles(g: Graph, layers: dict) -> dict:
             put(t.id, 'logo', conf=.6)
         elif OFFER_RE.search(txt) and words <= 5:
             put(t.id, 'offer', conf=.75)
-        elif fs <= min(hs * .3, median) and fs <= sizes[0] * 1.05 and t.box.cy > g.height * .7 \
+        elif fs <= min(sizes[-1] * .3, median) and fs <= sizes[0] * 1.05 and t.box.cy > g.height * .7 \
                 and (LEGAL_RE.search(txt) or words >= 12):
             put(t.id, 'legal', conf=.7)
         elif repeated:
@@ -186,7 +199,8 @@ def infer_roles(g: Graph, layers: dict) -> dict:
         elif head and h_overlap and fs <= hs * .5 and words <= 5 and t.box.b <= head.box.y + 2 \
                 and head.box.y - t.box.b <= hs * 1.5:
             put(t.id, 'eyebrow', conf=.65)
-        elif head and h_overlap and hs * .3 <= fs <= hs * .85 and 0 <= t.box.y - head.box.b <= hs * 1.6:
+        elif head and h_overlap and hs * .3 <= fs <= hs * .85 and 0 <= t.box.y - head.box.b <= hs * 1.6 \
+                and (_lines(t) == 1 or fs >= hs * .5):
             put(t.id, 'subhead', conf=.7)
         elif fs >= base * 1.5 and words <= 10:
             put(t.id, 'subhead', conf=.55)
@@ -212,7 +226,7 @@ def infer_roles(g: Graph, layers: dict) -> dict:
 
 # ---------------------------------------------------------------- 3. groups
 
-def _units(g: Graph, layers: dict) -> list[dict]:
+def _units(g: Graph, layers: dict, roles: dict | None = None) -> list[dict]:
     """Atoms for grouping: explicit groups, containers with their text, then single leaves."""
     pa = g.width * g.height
     content = set(layers['content'])
@@ -237,6 +251,7 @@ def _units(g: Graph, layers: dict) -> list[dict]:
             taken.add(nid)
     for u in units:
         nodes = [g.by_id[m] for m in u['members']]
+        u['logo'] = any((roles or {}).get(n.id, {}).get('role') == 'logo' for n in nodes)
         u['box'] = Box.bound(n.box for n in nodes)
         u['textual'] = any(n.type == 'text' for n in nodes)
         u['image'] = all(n.type == 'image' for n in nodes)
@@ -259,7 +274,10 @@ def _divided(upper: Box, lower: Box, dividers: list[Box]) -> bool:
     return any(d.y >= upper.b - 1 and d.b <= lower.y + 1 and _overlap_1d(d.x, d.r, x0, x1) > 0 for d in dividers)
 
 
-def _should_join(a: dict, b: dict, g: Graph, others: list[Box], dividers: list[Box] = ()) -> bool:
+def _should_join(a: dict, b: dict, g: Graph, others, dividers: list[Box] = ()) -> bool:
+    """`others` is a callable returning the boxes of all other units (only needed for row checks)."""
+    if a['logo'] or b['logo']:
+        return False      # a logo is always its own block: it gets anchored, not re-flowed with copy
     A, B = a['box'], b['box']
     short = min(g.width, g.height)
     pa = g.width * g.height
@@ -283,7 +301,7 @@ def _should_join(a: dict, b: dict, g: Graph, others: list[Box], dividers: list[B
         lu, ru = (a, b) if A.x <= B.x else (b, a)
         if a['single_text'] and b['single_text'] and abs(a['fs'] - b['fs']) <= .1 * big \
                 and lu['align'] == 'left' and ru['align'] == 'right' \
-                and voverlap >= .8 * min(A.h, B.h) and hgap > 0 and not _between(A, B, others):
+                and voverlap >= .8 * min(A.h, B.h) and hgap > 0 and not _between(A, B, others()):
             return True
         return False
     if a['image'] != b['image'] and (a['textual'] or b['textual']):
@@ -300,7 +318,7 @@ def _should_join(a: dict, b: dict, g: Graph, others: list[Box], dividers: list[B
 
 
 def find_groups(g: Graph, layers: dict, roles: dict) -> list[dict]:
-    units = _units(g, layers)
+    units = _units(g, layers, roles)
     dsu = _DSU(range(len(units)))
     boxes = [u['box'] for u in units]
     dividers = [g.by_id[d].box for d in layers['decoration'] if g.by_id[d].type == 'shape'
@@ -309,7 +327,7 @@ def find_groups(g: Graph, layers: dict, roles: dict) -> list[dict]:
         for j in range(i + 1, len(units)):
             if units[i].get('explicit') or units[j].get('explicit'):
                 continue   # author-made groups are kept as they are
-            others = [b for k, b in enumerate(boxes) if k not in (i, j)]
+            others = (lambda i=i, j=j: [b for k, b in enumerate(boxes) if k not in (i, j)])
             if _should_join(units[i], units[j], g, others, dividers):
                 dsu.union(i, j)
     buckets: dict[int, list[dict]] = {}
@@ -404,7 +422,8 @@ def find_grid(g: Graph, layers: dict, groups: list[dict]) -> dict:
     lines = []
     in_box = {x for ts in layers['containers'].values() for x in ts}
     def counts(n, kind):   # text only defines the edge it is aligned to; the rest of its box is empty space
-        if n.type != 'text' or n.id in in_box: return True
+        if n.id in in_box: return False      # button labels follow their button
+        if n.type != 'text': return True
         return n.style.get('align', 'left') == kind
     for kind, f in (('left', lambda b: b.x), ('center', lambda b: b.cx), ('right', lambda b: b.r)):
         for pos, ms in _cluster([(f(n.box), n.id) for n in leaves if counts(n, kind)], tol):
@@ -428,25 +447,47 @@ def find_grid(g: Graph, layers: dict, groups: list[dict]) -> dict:
     return {'margins': margins, 'lines': lines, 'alignment': alignment}
 
 
+def _column(gr: dict, tall: list[dict], W: float) -> tuple[float, float]:
+    """The horizontal band a group lives in: the page, or the space beside a tall photo/card."""
+    b, tol = gr['box'], W * .01
+    x0 = max([v['box'].r for v in tall if v is not gr and v['box'].r <= b.x + tol], default=0.0)
+    x1 = min([v['box'].x for v in tall if v is not gr and v['box'].x >= b.r - tol], default=W)
+    return x0, x1
+
+
 def find_anchors(g: Graph, groups: list[dict], margins: dict) -> None:
+    """Which edges each group follows. Groups beside a tall photo are anchored within their column."""
     W, H = g.width, g.height
+    tall = [x for x in groups if x['kind'] in ('image', 'card') and x['box'].h >= H * .7]
+    cols = {x['id']: _column(x, tall, W) for x in groups}
     for gr in groups:
         b = gr['box']
+        x0, x1 = cols[gr['id']]
+        cw = x1 - x0
+        same = [o['box'] for o in groups if cols[o['id']] == (x0, x1)]
+        def side(dists):
+            keep = [d for d in dists if d > cw * .01]
+            return min(keep) if keep else 0.0
+        if (x0, x1) == (0.0, W):
+            ml, mr = margins['left'], margins['right']
+        else:
+            ml, mr = side([o.x - x0 for o in same]), side([x1 - o.r for o in same])
+            gr['column'] = [round(x0, 1), round(x1, 1)]
         a = []
-        left = b.x <= margins['left'] + W * .04
-        right = W - b.r <= margins['right'] + W * .04
-        centred = abs(b.cx - W / 2) <= W * .02
+        left = b.x - x0 <= ml + W * .04 and b.x - x0 <= cw * .2
+        right = x1 - b.r <= mr + W * .04 and x1 - b.r <= cw * .2
+        centred = abs(b.cx - (x0 + x1) / 2) <= cw * .03
         if left and right:   # spans margin to margin: its own text alignment says which edge it follows
-            if (b.w >= W * .9 and gr['kind'] in ('image', 'card')) or gr['kind'] == 'row': a += ['left', 'right']
+            if (b.w >= cw * .9 and gr['kind'] in ('image', 'card')) or gr['kind'] == 'row': a += ['left', 'right']
             elif gr.get('text_align') == 'center' or (gr.get('text_align') is None and centred): a.append('center-x')
             elif gr.get('text_align') == 'right': a.append('right')
             else: a.append('left')
         elif left: a.append('left')
         elif right: a.append('right')
         elif centred: a.append('center-x')
-        if b.y <= margins['top'] + H * .04: a.append('top')
-        if H - b.b <= margins['bottom'] + H * .04: a.append('bottom')
-        if abs(b.cy - H / 2) <= H * .02 and not ('top' in a and 'bottom' in a): a.append('center-y')
+        if b.y <= margins['top'] + H * .04 and b.y <= H * .15: a.append('top')
+        if H - b.b <= margins['bottom'] + H * .04 and H - b.b <= H * .15: a.append('bottom')
+        if abs(b.cy - H / 2) <= H * .02 and 'top' not in a and 'bottom' not in a: a.append('center-y')
         if b.w >= W * .9 and 'fill-x' not in a: a.append('fill-x')
         gr['anchors'] = a
 
@@ -535,6 +576,9 @@ def _notes(g, layers, roles, groups, grid, style, subjects) -> list[str]:
         notes.append('Text alignment is mixed.')
     m = grid['margins']
     notes.append(f"Margins: left {m['left']:.0f}, top {m['top']:.0f}, right {m['right']:.0f}, bottom {m['bottom']:.0f} px.")
+    cols = {tuple(gr['column']) for gr in groups if gr.get('column')}
+    for c0, c1 in sorted(cols):
+        notes.append(f"Content beside the tall image forms a column at x {c0:.0f}–{c1:.0f}; it is anchored within that column.")
     shared = [l for l in grid['lines'] if l['axis'] == 'x' and len(l['members']) >= 3]
     for l in shared[:3]:
         notes.append(f"{len(l['members'])} elements share a {l['kind']} edge at x={l['pos']:.0f}.")

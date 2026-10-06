@@ -3,7 +3,8 @@
 (function () {
   const $ = id => document.getElementById(id);
   const NS = 'http://www.w3.org/2000/svg';
-  const PALETTE = ['#7c3aed', '#0284c7', '#d97706', '#059669', '#dc2626', '#db2777', '#0d9488', '#4f46e5', '#65a30d', '#ea580c'];
+  // every colour carries white 11px labels at ≥ 4.5:1
+  const PALETTE = ['#6d28d9', '#0369a1', '#b45309', '#047857', '#b91c1c', '#be185d', '#0f766e', '#4338ca', '#4d7c0f', '#c2410c'];
   const LAYERS = [
     { key: 'groups', label: 'Groups', on: true, swatch: '#7c3aed' },
     { key: 'roles', label: 'Roles', on: false, swatch: '#0284c7' },
@@ -127,7 +128,7 @@
         const G = svg('g', { class: 'grp' + (S.hot === g.id ? ' on' : ''), 'data-id': g.id }, o);
         svg('rect', { class: 'fill', x: x - pad, y: y - pad, width: w + pad * 2, height: h + pad * 2, fill: c }, G);
         svg('rect', { class: 'box', x: x - pad, y: y - pad, width: w + pad * 2, height: h + pad * 2, rx: 4 * k, stroke: c }, G);
-        if (!S.on.order) tag(G, x - pad, y - pad, title(g), c, k);
+        if (S.hot === g.id || (!S.on.order && a.groups.length <= 4)) tag(G, x - pad, y - pad, title(g), c, k);
       });
     }
     if (S.on.roles) {
@@ -141,15 +142,17 @@
     if (S.on.anchors) {
       for (const g of a.groups) {
         const [x, y, w, h] = g.box, c = '#16a34a', cx = x + w / 2, cy = y + h / 2;
-        const arrows = { left: [x, cy, 0, cy], right: [x + w, cy, W, cy], top: [cx, y, cx, 0], bottom: [cx, y + h, cx, H] };
+        const [c0, c1] = g.column || [0, W];   // groups beside a tall photo are anchored within their column
+        const arrows = { left: [x, cy, c0, cy], right: [x + w, cy, c1, cy], top: [cx, y, cx, 0], bottom: [cx, y + h, cx, H] };
         for (const an of g.anchors) {
           if (arrows[an]) {
             const [x1, y1, x2, y2] = arrows[an];
             svg('line', { x1, y1, x2, y2, stroke: c, 'stroke-width': 2 }, o);
             svg('circle', { cx: x2, cy: y2, r: 4 * k, fill: c }, o);
           } else if (an === 'center-x') {
-            svg('line', { x1: W / 2, x2: W / 2, y1: y - 10 * k, y2: y + h + 10 * k, stroke: c, 'stroke-width': 2, 'stroke-dasharray': '6 3' }, o);
-            svg('path', { d: `M${W / 2} ${y - 16 * k}l${6 * k} ${6 * k}l${-6 * k} ${6 * k}l${-6 * k} ${-6 * k}Z`, fill: c }, o);
+            const mid = (c0 + c1) / 2;
+            svg('line', { x1: mid, x2: mid, y1: y - 10 * k, y2: y + h + 10 * k, stroke: c, 'stroke-width': 2, 'stroke-dasharray': '6 3' }, o);
+            svg('path', { d: `M${mid} ${y - 16 * k}l${6 * k} ${6 * k}l${-6 * k} ${6 * k}l${-6 * k} ${-6 * k}Z`, fill: c }, o);
           }
         }
       }
@@ -166,13 +169,15 @@
         svg('circle', { cx, cy, r, fill: color(i), stroke: '#fff', 'stroke-width': 2 }, o);
         const t = svg('text', { x: cx, y: cy + 4 * k, 'font-size': 12 * k, fill: '#fff', 'text-anchor': 'middle' }, o);
         t.textContent = n + 1;
-        if (S.on.groups) tag(o, cx + r + 3 * k, cy + 6 * k, title(g), color(i), k);
+
       });
     }
   }
 
   function setHot(id) {
+    const changed = S.hot !== id;
     S.hot = id;
+    if (changed) drawOverlay();
     document.querySelectorAll('.xr-overlay .grp').forEach(g => g.classList.toggle('on', g.dataset.id === id));
     document.querySelectorAll('.xr-group').forEach(b => b.classList.toggle('on', b.dataset.id === id));
   }
@@ -181,13 +186,15 @@
   function renderPanel() {
     const a = S.analysis, d = S.design;
     const meta = d.meta || {};
-    $('xr-meta').replaceChildren(
+    $('xr-meta').replaceChildren(...[
       el('strong', { text: d.name || 'Untitled design' }),
       el('span', { class: 'xr-pill', text: `${d.page.width}×${d.page.height}` }),
       el('span', { class: 'xr-pill', text: a.page.orientation }),
       el('span', { class: 'xr-pill', text: a.style.structure.replace('-', ' ') }),
       el('span', { class: 'xr-pill', text: `${a.grid.alignment} aligned` }),
-      meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null);
+      meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null,
+      S.mine && a.subjects[S.mine] ? el('span', { class: 'xr-pill mine', role: 'status',
+        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}%` }) : null].filter(Boolean));
     $('xr-notes').replaceChildren(...a.notes.map(n => el('li', { text: n })));
     $('xr-gcount').textContent = a.groups.length;
     const orderPos = Object.fromEntries(a.reading_order.map((id, i) => [id, i + 1]));
@@ -214,16 +221,59 @@
 
   // ---------------------------------------------------------------- data flow
   async function show(design) {
+    const ticket = (S.ticket = (S.ticket || 0) + 1);
     try {
       const analysis = await api('/analyze', { design });
+      if (ticket !== S.ticket) return false;   // a newer design was picked meanwhile
       S.design = design; S.analysis = analysis; S.hot = null;
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       renderPanel(); fit();
-    } catch (e) { showError(e.message); }
+      return true;
+    } catch (e) { if (ticket === S.ticket) showError(e.message); return false; }
   }
   async function pick(id) {
+    S.mine = null;
     try { await show(await api('/testset/' + encodeURIComponent(id))); history.replaceState(null, '', '#d=' + id); }
     catch (e) { showError(e.message); }
+  }
+
+  // ---------------------------------------------------------------- your photo
+  function photoTarget(d, a) {
+    const imgs = d.nodes.filter(n => n.type === 'image' && !['logo', 'decoration'].includes(a?.roles[n.id]?.role));
+    const rank = n => ({ background: 3, hero: 2 }[a?.roles[n.id]?.role] || 1) * 1e9 + n.box[2] * n.box[3];
+    return imgs.sort((p, q) => rank(q) - rank(p))[0] || null;
+  }
+  function fileToCroppedDataURL(file, aspect, maxSide = 1600) {
+    // crop to the slot's shape first, so the subject box (image-relative) lines up with the slot on the page
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), im = new Image();
+      im.onload = () => {
+        let sw = im.naturalWidth, sh = im.naturalHeight;
+        if (sw / sh > aspect) sw = sh * aspect; else sh = sw / aspect;
+        const sx = (im.naturalWidth - sw) / 2, sy = (im.naturalHeight - sh) / 2;
+        const k = Math.min(1, maxSide / Math.max(sw, sh));
+        const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+        c.getContext('2d').drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', .88));
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can open.')); };
+      im.src = url;
+    });
+  }
+  async function usePhoto(file) {
+    if (!file || !S.design) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return showError('Use a PNG, JPG or WebP image.');
+    if (file.size > 25e6) return showError('That image is over 25 MB. Try a smaller one.');
+    const d = JSON.parse(JSON.stringify(S.design));
+    const target = photoTarget(d, S.analysis);
+    if (!target) return showError('This design has no photo to replace. Pick one with a photo, e.g. “Travel overlay”.');
+    try {
+      target.src = await fileToCroppedDataURL(file, target.box[2] / target.box[3]);
+      delete target.subject;                 // make the engine find it
+      target.meta = { ...(target.meta || {}), label: 'your photo' };
+      S.mine = target.id;
+      await show(d);
+    } catch (e) { showError(e.message); }
   }
 
   function hitTest(ev) {
@@ -238,6 +288,15 @@
 
   function boot() {
     $('xr-file-icon').replaceChildren(Icon('upload')); $('xr-home-icon').replaceChildren(Icon('home'));
+    $('xr-photo-icon').replaceChildren(Icon('image'));
+    $('xr-photo').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; usePhoto(f); });
+    const stage = document.querySelector('.xr-stage');
+    let depth = 0;
+    const hasFile = e => [...(e.dataTransfer?.types || [])].includes('Files');
+    stage.addEventListener('dragenter', e => { if (!hasFile(e)) return; e.preventDefault(); depth++; $('xr-drop').hidden = false; });
+    stage.addEventListener('dragover', e => { if (hasFile(e)) e.preventDefault(); });
+    stage.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; $('xr-drop').hidden = true; } });
+    stage.addEventListener('drop', e => { if (!hasFile(e)) return; e.preventDefault(); depth = 0; $('xr-drop').hidden = true; usePhoto(e.dataTransfer.files[0]); });
     const themeBtn = $('xr-theme');
     const paintTheme = () => themeBtn.replaceChildren(Icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon'));
     themeBtn.onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -256,13 +315,20 @@
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
       try {
         const d = JSON.parse(await f.text());
-        const opt = el('option', { value: 'import:' + f.name, text: 'Imported · ' + f.name });
-        $('xr-design').append(opt); $('xr-design').value = opt.value;
+        if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('expected a design object');
         if (!d.nodes && d.elements) { showError('This is a studio file. Open it in the studio, or convert it to chameleon-graph/1.'); return; }
-        await show(d);
+        const prevMine = S.mine; S.mine = null;
+        if (await show(d)) {
+          const opt = el('option', { value: 'import:' + f.name, text: 'Imported · ' + f.name });
+          $('xr-design').append(opt); $('xr-design').value = opt.value;
+        } else S.mine = prevMine;
       } catch (err) { showError('Could not read that file: ' + err.message); }
     });
     new ResizeObserver(() => fit()).observe(document.querySelector('.xr-stage'));
+    window.addEventListener('hashchange', () => {
+      const m = location.hash.match(/d=([\w-]+)/);
+      if (m && [...$('xr-design').options].some(o => o.value === m[1]) && $('xr-design').value !== m[1]) { $('xr-design').value = m[1]; pick(m[1]); }
+    });
     api('/testset').then(ts => {
       S.sizes = ts.sizes;
       const groups = {};

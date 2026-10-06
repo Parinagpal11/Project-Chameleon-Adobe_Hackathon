@@ -24,8 +24,12 @@
     <select id="xr-design" aria-label="Design to analyse"></select>
   </label>
   <label class="xr-btn" title="Analyse your own design JSON">
-    <input id="xr-file" type="file" accept="application/json,.json" class="visually-hidden">
+    <input id="xr-file" type="file" accept="application/json,.json" class="visually-hidden" aria-label="Import a design JSON file">
     <span id="xr-file-icon"></span><span>Import JSON</span>
+  </label>
+  <label class="xr-btn" title="Put your own photo into this design and let Chameleon find its subject">
+    <input id="xr-photo" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" aria-label="Use your own photo in this design">
+    <span id="xr-photo-icon"></span><span>Use your photo</span>
   </label>
   <span class="xr-spacer"></span>
   <a class="xr-btn ghost" href="/" title="Back to the studio"><span id="xr-home-icon"></span><span>Studio</span></a>
@@ -35,6 +39,7 @@
 <main class="xr-main">
   <section class="xr-stage" aria-label="Design with analysis overlay">
     <div class="xr-meta" id="xr-meta" aria-live="polite"></div>
+    <div class="xr-drop" id="xr-drop" hidden>Drop the photo to use it in this design</div>
     <div class="xr-art" id="xr-art">
       <canvas id="xr-canvas" role="img" aria-label="Design preview"></canvas>
       <svg id="xr-overlay" class="xr-overlay" aria-hidden="true"></svg>
