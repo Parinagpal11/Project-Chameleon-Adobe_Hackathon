@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 python run.py
 ```
 
-Open http://127.0.0.1:8000. Stop with Control+C. If port 8000 is busy, use `python run.py --port 8001`. To host it for a demo, run `python run.py --host 0.0.0.0` (the `PORT` environment variable is respected). There is no login yet.
+Open http://127.0.0.1:8000. Stop with Control+C. The app restarts itself when backend code changes (use `python run.py --no-reload` for demos). If port 8000 is busy, use `python run.py --port 8001`. To host it for a demo, run `python run.py --host 0.0.0.0` (the `PORT` environment variable is respected). There is no login yet.
 
 You don't need Node, an API key or a build step. Fonts load from Google Fonts when online and fall back to system fonts offline.
 
