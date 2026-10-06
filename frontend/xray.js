@@ -276,6 +276,8 @@
     S.view = v;
     $('tab-understand').setAttribute('aria-selected', String(v === 'understand'));
     $('tab-resize').setAttribute('aria-selected', String(v === 'resize'));
+    $('tab-understand').tabIndex = v === 'understand' ? 0 : -1;   // roving tabindex: one tab stop for the tab list
+    $('tab-resize').tabIndex = v === 'resize' ? 0 : -1;
     $('xr-main').hidden = v !== 'understand';
     $('xr-resize').hidden = v !== 'resize';
     if (v === 'resize') runAdapt(); else fit();

@@ -555,6 +555,8 @@ def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: li
     the most of them it can (by area) instead of centring on the empty space between them.
     Returns image-relative `crop` [x, y, w, h] and `kept`, the share of the subject(s) inside it."""
     parts = parts or [subject]
+    if not (image_aspect > 0 and slot_aspect > 0) or not all(map(math.isfinite, (image_aspect, slot_aspect))):
+        return {'crop': [0.0, 0.0, 1.0, 1.0], 'kept': 1.0}      # zero-size image or slot: nothing to crop
     wide = image_aspect > slot_aspect
     if wide:
         cw, ch = slot_aspect / image_aspect, 1.0

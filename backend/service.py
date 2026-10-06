@@ -311,8 +311,8 @@ def _clean_targets(targets):
     from engine.plan import EVAL_SIZES
     if targets is None:
         return EVAL_SIZES
-    if not isinstance(targets, list) or len(targets) > 30:
-        raise ValueError('targets must be a list of up to 30 sizes')
+    if not isinstance(targets, list) or not targets or len(targets) > 30:
+        raise ValueError('targets must be a list of 1 to 30 sizes')
     clean = []
     for i, t in enumerate(targets):
         if not isinstance(t, dict):
@@ -323,7 +323,7 @@ def _clean_targets(targets):
             raise ValueError(f'targets[{i}] needs numeric width and height') from None
         if not (16 <= w <= 8192 and 16 <= h <= 8192):
             raise ValueError('Each target needs width and height between 16 and 8192')
-        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(w), 'height': int(h)})
+        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(round(w)), 'height': int(round(h))})
     return clean
 
 
@@ -354,8 +354,8 @@ def analyze_request(data):
     targets = data.get('targets')
     if targets is None:
         targets = EVAL_SIZES
-    if not isinstance(targets, list) or len(targets) > 30:
-        raise ValueError('targets must be a list of up to 30 sizes')
+    if not isinstance(targets, list) or not targets or len(targets) > 30:
+        raise ValueError('targets must be a list of 1 to 30 sizes')
     clean = []
     for i, t in enumerate(targets):
         if not isinstance(t, dict):
@@ -366,7 +366,7 @@ def analyze_request(data):
             raise ValueError(f'targets[{i}] needs numeric width and height') from None
         if not (16 <= w <= 8192 and 16 <= h <= 8192):
             raise ValueError('Each target needs width and height between 16 and 8192')
-        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(w), 'height': int(h)})
+        clean.append({'name': str(t.get('name') or '')[:60], 'width': int(round(w)), 'height': int(round(h))})
     try:
         return analyze(design, clean)
     except (KeyError, TypeError) as exc:

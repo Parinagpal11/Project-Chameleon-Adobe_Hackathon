@@ -128,7 +128,7 @@ class AdaptTestSet(unittest.TestCase):
         self.assertGreater(px, ix + iw)
 
     def test_banner_puts_logo_in_the_row(self):
-        r = {res['width']: res for res in self.out['story-stacked']['results']}
+        r = {res['width']: res for res in self.out['product-grid']['results']}
         res = r[728]
         self.assertIn('Logo joins the row so the banner reads left to right.', res['reasons'])
         vis = visible(res)
@@ -136,13 +136,29 @@ class AdaptTestSet(unittest.TestCase):
         self.assertLess(lx, 728 * .3)
         self.assertTrue(0 <= ly and ly + lh <= 90)
 
+    def test_light_logo_stays_on_the_photo(self):
+        """story-stacked's logo is white, made for the photo: it must never land on the cream copy area."""
+        for res in self.out['story-stacked']['results']:
+            self.assertEqual(res['checks']['low_contrast'], [], res['width'])
+            if 'logo' in visible(res):
+                self.assertFalse(any(r.startswith('Logo joins the row') for r in res['reasons']))
+            else:
+                self.assertTrue(any(r.startswith('Logo dropped') for r in res['reasons']), res['width'])
+
     def test_drops_are_explained(self):
+        from engine.understand import analyze
+        from engine.graph import load
         for i, r in self.out.items():
+            roles = {k: v['role'] for k, v in analyze(load(design(i)))['roles'].items()}
             for res in r['results']:
-                hidden = [n for n in res['checks']['dropped']]
-                if hidden:
-                    self.assertTrue(any('Dropped' in x or 'dropped' in x for x in res['reasons']),
-                                    (i, res['width'], res['height'], hidden))
+                text = ' '.join(res['reasons']).lower()
+                for nid in res['checks']['dropped']:
+                    role = roles.get(nid, '')
+                    if role in ('panel', 'background'):
+                        continue
+                    name = 'photo' if role in ('hero', 'image') else role
+                    self.assertTrue(name in text or 'cards' in text or 'showing' in text or 'logo dropped' in text,
+                                    (i, res['width'], res['height'], nid, role, res['reasons']))
 
     def test_photos_are_cropped_not_stretched_and_src_not_repeated(self):
         for i, r in self.out.items():

@@ -20,7 +20,9 @@ How it works (deterministic, block based):
 from __future__ import annotations
 
 import copy
+import json
 import math
+from pathlib import Path
 
 from .graph import Box, load
 from .plan import plan_tier
@@ -29,58 +31,94 @@ from .understand import analyze
 
 MIN_TEXT = 12.0
 DROP_ORDER = ['decoration', 'legal', 'caption', 'body', 'item', 'price', 'eyebrow', 'badge', 'repeat', 'subhead', 'offer']
-CHAR_W = {'Inter': .56, 'Poppins': .6, 'Playfair Display': .52, 'Space Grotesk': .57, 'Montserrat': .62,
-          'DM Serif Display': .5}
-
 
 # ---------------------------------------------------------------- text measurement
+# Advance widths of the fonts the studio loads (tools/make_font_metrics.py), so wrapped text boxes match what the
+# browser draws. Unknown fonts fall back to Inter; unknown characters to the font's average width.
 
-def char_w(style: dict) -> float:
-    w = CHAR_W.get(style.get('fontFamily', 'Inter'), .56)
-    w *= 1 + (int(style.get('fontWeight') or 400) - 400) / 2500
-    return w
+_FONTS = json.loads((Path(__file__).with_name('fonts.json')).read_text(encoding='utf-8'))
+WRAP_SAFETY = 1.03            # canvases differ a little (kerning, hinting): wrap as if text were 3% wider
 
 
-def text_lines(text: str, fs: float, width: float, style: dict) -> int:
-    """Greedy word wrap with an average glyph width: good enough to size boxes (the renderer fits exactly)."""
-    if width <= 0:
-        return 99
-    cw = char_w(style) * fs
-    ls = float(style.get('letterSpacing') or 0)
-    caps = (text or '').upper() == (text or '') and any(c.isalpha() for c in text or '')
-    unit = cw * (1.08 if caps else 1) + ls
-    lines = 0
-    for para in str(text or '').split('\n'):
-        cur = 0.0
-        lines += 1
-        for word in para.split():
-            wlen = len(word) * unit
-            if cur and cur + unit + wlen > width:
-                lines += 1
-                cur = wlen
-            else:
-                cur = cur + (unit if cur else 0) + wlen
-            if wlen > width:            # a single word wider than the box
-                lines += int(wlen // width)
-    return max(1, lines)
+def _table(style: dict, family: str | None = None) -> dict:
+    fam = _FONTS.get(family or style.get('fontFamily') or 'Inter') or _FONTS['Inter']
+    try:
+        w = int(float(style.get('fontWeight') or 400))
+    except (TypeError, ValueError):
+        w = 400
+    key = min(fam, key=lambda k: abs(int(k) - w))
+    return fam[key]
+
+
+def _em(text: str, t: dict) -> float:
+    avg = t.get('n', .55)
+    return sum(t.get(c, avg) for c in text)
 
 
 def text_width(text: str, fs: float, style: dict) -> float:
+    """Width in px. For fonts other than Inter, the wider of that font and Inter: if the web font fails to load,
+    the page falls back to Inter, and the text must still fit its box."""
+    s = str(text or '')
+    em = _em(s, _table(style))
+    if (style.get('fontFamily') or 'Inter') != 'Inter':
+        em = max(em, _em(s, _table(style, 'Inter')))
     ls = float(style.get('letterSpacing') or 0)
-    caps = (text or '').upper() == (text or '') and any(c.isalpha() for c in text or '')
-    return len(text or '') * (char_w(style) * fs * (1.08 if caps else 1) + ls)
+    return (em * fs + ls * len(s)) * WRAP_SAFETY
+
+
+def char_w(style: dict) -> float:
+    """Average glyph width in em (lower-case text)."""
+    return text_width('the quick brown fox jumps', 1.0, style) / 25
+
+
+def wrap_widths(text: str, fs: float, width: float, style: dict) -> list:
+    """Greedy word wrap, the same way the renderer wraps (words never split): the width of each line."""
+    space = text_width(' ', fs, style)
+    out = []
+    for para in str(text or '').split('\n'):
+        cur = 0.0
+        for word in para.split():
+            wl = text_width(word, fs, style)
+            if cur and cur + space + wl > width + .01:
+                out.append(cur)
+                cur = wl
+            else:
+                cur = cur + (space if cur else 0) + wl
+        out.append(cur)
+    return out or [0.0]
+
+
+def text_lines(text: str, fs: float, width: float, style: dict) -> int:
+    if width <= 0:
+        return 99
+    return max(1, len(wrap_widths(text, fs, width, style)))
+
+
+def drawn_size(node: dict) -> float:
+    """The font size the renderer will actually use: it shrinks text until the wrapped lines fit the box."""
+    st = node.get('style') or {}
+    x, y, w, h = node['box']
+    size = float(st.get('fontSize') or h * .7)
+    lh = float(st.get('lineHeight') or 1.15)
+    if w <= 0 or h <= 0:
+        return 0.0
+    for _ in range(40):
+        ws = wrap_widths(node.get('text', ''), size, w, st)
+        if len(ws) * size * lh <= h * 1.08 and max(ws) <= w * 1.02 * WRAP_SAFETY:
+            break
+        size *= .95
+    return size
+
+
+def longest_word(text: str, fs: float, style: dict) -> float:
+    return max((text_width(w, fs, style) for w in str(text or '').split()), default=0.0)
 
 
 # ---------------------------------------------------------------- flow items
 
 def lines_for(n, fs: float, width: float) -> int:
-    """Line count at font size fs in `width`, calibrated on the original box (how many lines it really had there)."""
-    lh = float(n.style.get('lineHeight') or 1.15)
-    fs0 = n.font_size
-    real = max(1, round(n.box.h / max(1e-6, fs0 * lh)))
-    est0 = text_lines(n.text, fs0, n.box.w, n.style)
-    est1 = text_lines(n.text, fs, width, n.style)
-    return max(1, real + est1 - est0)
+    """Line count of text node n at font size fs wrapped in `width`."""
+    return text_lines(n.text, fs, width, n.style)
 
 
 class Item:
@@ -99,6 +137,7 @@ class Item:
         self.align = (group.get('text_align') or by_anchor) if self.kind in ('text', 'text-stack') else by_anchor
         self.roles = roles
         self.dropped: set[str] = set()       # member ids hidden to make room
+        self.keep_h = False                  # keep the designer's text box height as a minimum (layout kept)
         self.pills = []                      # several buttons in one group (store badges): (shape, label) pairs
         shapes = [n for n in self.members if n.type == 'shape']
         if self.kind in ('button', 'badge') and len(shapes) > 1:
@@ -198,13 +237,19 @@ class Item:
             texts = sorted(self.texts, key=lambda n: n.box.y)
             if not texts:
                 return 0, 0
-            w = min(avail_w, max(self.box.w * k, avail_w if len(texts) > 1 or self.box.w * k > avail_w else 0) or avail_w)
+            if len(texts) > 1:
+                w = avail_w
+            else:      # as wide as its box at this scale, or as its words need at the (12 px floored) size
+                n0 = texts[0]
+                need = text_width(n0.text, max(MIN_TEXT, n0.font_size * k), n0.style) if '\n' not in (n0.text or '') else \
+                    max(text_width(t, max(MIN_TEXT, n0.font_size * k), n0.style) for t in n0.text.split('\n'))
+                w = min(avail_w, max(self.box.w * k, need))
             h = 0.0
             prev = None
             for n in texts:
                 fs = max(MIN_TEXT, n.font_size * k)
                 lh = float(n.style.get('lineHeight') or 1.15)
-                h += lines_for(n, fs, w) * fs * lh
+                h += max(lines_for(n, fs, w) * fs * lh, n.box.h * k if self.keep_h else 0)
                 if prev is not None:
                     h += max(0.0, n.box.y - prev.box.b) * k
                 prev = n
@@ -265,9 +310,9 @@ class Item:
                 lh = float(n.style.get('lineHeight') or 1.15)
                 if prev is not None:
                     cy += max(0.0, n.box.y - prev.box.b) * k
-                nl = lines_for(n, fs, iw)
-                _set(out, n.id, [ax(iw), cy, iw, nl * fs * lh], fs=fs)
-                cy += nl * fs * lh
+                th = max(lines_for(n, fs, iw) * fs * lh, n.box.h * k if self.keep_h else 0)
+                _set(out, n.id, [ax(iw), cy, iw, th], fs=fs)
+                cy += th
                 prev = n
             return iw, cy - y
         u = self.uk(k)
@@ -296,6 +341,7 @@ class RepeatItem:
 
     def __init__(self, groups: list[dict], g, roles: dict):
         self.cards = sorted((Item(gr, g, roles) for gr in groups), key=lambda c: (round(c.box.y / 8), c.box.x))
+        self.total = len(self.cards)
         self.id = 'repeat:' + self.cards[0].id
         self.align = 'center'
         self.dropped: set[str] = set()
@@ -319,6 +365,10 @@ class RepeatItem:
     @property
     def texts(self):
         return [n for c in self.cards for n in c.texts]
+
+    def refresh(self):
+        self.members = [m for c in self.cards for m in c.members]
+        self.orig_cols = min(self.orig_cols, len(self.cards))
 
     def importance(self) -> float:
         return DROP_ORDER.index('repeat')
@@ -357,9 +407,10 @@ class RepeatItem:
                 c = math.ceil(n / rows)
                 uc = min(u * 1.25, avail_w / (c * self.cw + (c - 1) * self.gap0),
                          self.max_h / (rows * self.ch + (rows - 1) * self.gap0))
-                if best is None or uc > best[0] + 1e-6 or (abs(uc - best[0]) < 1e-6 and c == self.orig_cols):
-                    best = (uc, c, rows)
-            uc, c, rows = best
+                score = uc * (1.0 if c == self.orig_cols else .88) * (.85 if c > 1 and n % c == 1 else 1.0)
+                if best is None or score > best[3] + 1e-9:
+                    best = (uc, c, rows, score)
+            uc, c, rows, _ = best
             if uc >= floor - 1e-6:
                 self._u = uc
                 return c, rows, uc, c * self.cw * uc + (c - 1) * self.gap0 * uc, rows * self.ch * uc + (rows - 1) * self.gap0 * uc
@@ -419,8 +470,9 @@ def _pill_size(sh, lab, k: float, avail_w: float):
     fs0 = lab.font_size * k
     fs = max(MIN_TEXT, fs0)
     grow = text_width(lab.text, fs, lab.style) - text_width(lab.text, fs0, lab.style)   # only when 12 px floor kicks in
-    w = max(sh.box.w * k + grow, text_width(lab.text, fs, lab.style) + fs * .6)
-    return min(avail_w, w), sh.box.h * k + (fs - fs0) * 1.6
+    h = sh.box.h * k + (fs - fs0) * 1.6
+    w = max(sh.box.w * k + grow, text_width(lab.text, fs, lab.style) + max(fs * .6, h * .4 + 2))
+    return w, h
 
 
 def _place_pill(out, sh, lab, x: float, y: float, k: float, avail_w: float):
@@ -428,8 +480,25 @@ def _place_pill(out, sh, lab, x: float, y: float, k: float, avail_w: float):
     fs = max(MIN_TEXT, lab.font_size * k)
     _set(out, sh.id, [x, y, bw, bh], radius=min(float(sh.style.get('radius') or 0) * k, bh / 2))
     lh = fs * float(lab.style.get('lineHeight') or 1.15)
-    _set(out, lab.id, [x + bh * .2, y + (bh - lh) / 2, bw - bh * .4, lh], fs=fs)
+    lw = min(bw, max(bw - bh * .4, text_width(lab.text, fs, lab.style)))
+    _set(out, lab.id, [x + (bw - lw) / 2, y + (bh - lh) / 2, lw, lh], fs=fs)
     return bw, bh
+
+
+def _names(item, roles: dict) -> list:
+    """How a dropped item is named in the reasons: 'cards', or the roles of what it holds."""
+    if getattr(item, 'role', '') == 'repeat':
+        return ['cards']
+    names = [roles.get(n.id) or n.type for n in item.members if roles.get(n.id) not in ('decoration', 'background')]
+    names = [('photo' if r in ('hero', 'image') else r) for r in names]
+    return list(dict.fromkeys(names)) or [item.role]
+
+
+def _set_photo(out: dict, node, box):
+    """A photo slot: corner radius scales with the slot so a rounded card doesn't turn into a capsule."""
+    r = float((node.style or {}).get('radius') or 0)
+    k = min(box[2] / max(1.0, node.box.w), box[3] / max(1.0, node.box.h))
+    _set(out, node.id, box, radius=r * k if r else None)
 
 
 def _set(out: dict, nid: str, box, fs=None, radius=None):
@@ -473,12 +542,17 @@ def flow_column(items, region: Box, k: float, gap: float, valign: str, out: dict
     return total
 
 
+def _stretchy(it) -> bool:
+    """Items that take whatever width a row leaves them: text, and text lists."""
+    return it.reflowable() or getattr(it, 'flex', False)
+
+
 def _row_widths(items, region, k, gap):
-    fixed = [it for it in items if not it.reflowable()]
-    flex = [it for it in items if it.reflowable()]
+    fixed = [it for it in items if not _stretchy(it)]
+    flex = [it for it in items if _stretchy(it)]
     fixed_w = sum(it.measure(k, region.w)[0] for it in fixed)
     free = region.w - fixed_w - gap * max(0, len(items) - 1)
-    return [free / max(1, len(flex)) if it.reflowable() else it.measure(k, region.w)[0] for it in items], free, flex
+    return [free / max(1, len(flex)) if _stretchy(it) else it.measure(k, region.w)[0] for it in items], free, flex
 
 
 def flow_row(items, region: Box, k: float, gap: float, out: dict):
@@ -499,18 +573,31 @@ def fits_row(items, region, k, gap):
     min_flex = max((max(MIN_TEXT, n.font_size * k) * 5 for it in flex for n in it.texts), default=0)
     if (flex and free / len(flex) < min_flex) or (not flex and free < -.5):
         return False
-    return all(it.measure(k, w)[1] <= region.h + .5 for it, w in zip(items, widths)) and _readable(items, k)
+    return all(it.measure(k, w)[1] <= region.h + .5 for it, w in zip(items, widths)) and _readable(items, k) \
+        and _words_fit(items, k, widths)
 
 
 def _readable(items, k):
     """Cards squeezed to the width can end up with text under 12 px: that is not a fit."""
-    return all(it.min_font(k) >= MIN_TEXT - .01 for it in items if isinstance(it, RepeatItem))
+    return all(it.min_font(k) >= MIN_TEXT - .01 for it in items if isinstance(it, RepeatItem) and not it.flex)
+
+
+def _words_fit(items, k, widths):
+    """A single word wider than its column would make the renderer shrink the whole text: not a fit."""
+    for it, w in zip(items, widths):
+        if it.reflowable():
+            for n in it.texts:
+                if longest_word(n.text, max(MIN_TEXT, n.font_size * k), n.style) > w + .5:
+                    return False
+    return True
 
 
 def fits_column(items, region, k, gap):
+    if region.w <= 0 or region.h <= 0:
+        return False
     total = sum(it.measure(k, region.w)[1] for it in items) + gap * max(0, len(items) - 1)
     return total <= region.h + .5 and all(it.measure(k, region.w)[0] <= region.w + .5 for it in items) \
-        and _readable(items, k)
+        and _readable(items, k) and _words_fit(items, k, [region.w] * len(items))
 
 
 # ---------------------------------------------------------------- tier 1: keep the layout
@@ -540,6 +627,12 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
         if all(abs(kt - c) > 1e-3 for c in cands):
             cands.append(kt)
     groups = [gr for gr in a['groups'] if not all(m in layer_nodes for m in gr['members'])]
+    if abs(sx - 1) < 1e-6 and abs(sy - 1) < 1e-6:      # the original size: the design exactly as made
+        out = {n['id']: copy.deepcopy(n) for n in design['nodes']}
+        res = finish(design, g, a, out, W, H)
+        if res['checks']['ok']:
+            res['k'] = 1.0
+            return res
     for kt in cands:
         out = _fresh(design)
         placed = []                     # (orig box, item or None, members) of the movable copy groups
@@ -549,12 +642,16 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
             members = [g.by_id[m] for m in gr['members']]
             if gr['id'] in hero_ids:    # photos: the slot follows the canvas edges; the crop keeps the subject
                 for n in members:
-                    _set(out, n.id, [ob.x * sx, ob.y * sy, ob.w * sx, ob.h * sy])
+                    _set_photo(out, n, [ob.x * sx, ob.y * sy, ob.w * sx, ob.h * sy])
                 continue
             it = Item(gr, g, roles)
+            it.keep_h = True
             ki = kt if (it.reflowable() or it.is_pill() or it.is_label() or it.pills or it.is_text_row()) else u
             if it.reflowable() or it.is_text_row():
                 lane = ob.w * min(kt, sx)
+                if it.reflowable():      # a word never breaks: the lane is at least as wide as the longest word
+                    lane = max(lane, min(W - 2 * mmin, max((longest_word(n.text, max(MIN_TEXT, n.font_size * ki), n.style)
+                                                            for n in it.texts), default=0)))
                 w_, h_ = it.measure(ki, lane)
                 w_ = lane
             else:
@@ -576,7 +673,7 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
             placed.append((ob, members, 'bottom' in anchors))
         # a longer text pushes what sits under it down, keeping the original gap
         placed.sort(key=lambda p: p[0].y)
-        for i, (ob, mem, _) in enumerate(placed):
+        for i, (ob, mem, at_bottom) in enumerate(placed):
             for ob2, mem2, _ in placed[:i]:
                 if ob2.b > ob.y + 2:
                     continue
@@ -585,7 +682,10 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
                     continue
                 need = A.b + max(0.0, ob.y - ob2.b) * min(sy, kt) - B.y
                 if need > .5:
-                    _shift(out, mem, need)
+                    if at_bottom and A.y - need >= 0:
+                        _shift(out, mem2, -need)     # bottom-pinned things stay; what's above moves up
+                    else:
+                        _shift(out, mem, need)
         for nid in a['layers']['background']:
             _set(out, nid, [0, 0, W, H])
         for pid in a['layers']['panels']:
@@ -599,8 +699,6 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
         _decorate(out, g, a, W, H, sx, sy, u, None)
         res = finish(design, g, a, out, W, H)
         c = res['checks']
-        c['overlaps'] = [p for p in c['overlaps'] if tuple(sorted(p)) not in base_overlaps]
-        c['ok'] = not c['overlaps'] and not c['off_canvas'] and not c['small_text']
         if c['ok'] and not c['dropped']:
             res['k'] = kt
             return res
@@ -627,7 +725,10 @@ def _decorate(out, g, a, W, H, sx, sy, u, copy_region, hero_map=None):
                 Box(b.x * sx, b.y * sy, b.w * sx, max(1.0, b.h * u))
         if (n.type == 'text' or (copy_region is not None and band)) and any(nb.inter(cb) > 0 for cb in copy_boxes):
             continue      # never draw decoration across copy
-        _set(out, did, nb.list())
+        if copy_region is not None and band and hero_map and nb.inter(hero_map[1]) > 0 and not b.inter(hero_map[0]):
+            continue      # nor a band across a photo it didn't cross before
+        fs = n.font_size * min(nb.w / max(1.0, b.w), nb.h / max(1.0, b.h)) if n.type == 'text' else None
+        _set(out, did, nb.list(), fs=fs)
 
 
 def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: list | None = None):
@@ -654,9 +755,29 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         if n.get('src'):
             n.pop('src')
             n['srcFrom'] = n['id']
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    gone = []
+    for n in nodes:     # nothing degenerate or entirely outside the canvas is ever drawn
+        if n['type'] == 'group' or n.get('hidden'):
+            continue
+        x, y, w, h = n['box']
+        if not all(map(math.isfinite, n['box'])) or w < .5 or h < .5 or x >= W or y >= H or x + w <= 0 or y + h <= 0:
+            n['hidden'] = True
+            if roles.get(n['id']) not in ('decoration', 'background', 'panel'):
+                gone.append(roles.get(n['id']) or n['type'])
+    if gone:
+        reasons.append('No room at this size for: ' + ', '.join(dict.fromkeys(gone)) + '.')
     adapted = {'format': 'chameleon-graph/1', 'name': design.get('name', ''),
                'page': {**design['page'], 'width': W, 'height': H}, 'nodes': nodes}
-    return {'design': adapted, 'reasons': reasons, 'checks': check(adapted, a, crops)}
+    c = check(adapted, a, crops)
+    if not c['ok']:
+        bits = []
+        if c['small_text']: bits.append(f"{len(c['small_text'])} text under 12 px")
+        if c['off_canvas']: bits.append(f"{len(c['off_canvas'])} off canvas")
+        if c['overlaps']: bits.append(f"{len(c['overlaps'])} overlap{'s' if len(c['overlaps']) > 1 else ''}")
+        if c.get('low_contrast'): bits.append(f"{len(c['low_contrast'])} hard to read on its background")
+        reasons.append('This size is too small to fit the content cleanly: ' + ', '.join(bits) + '.')
+    return {'design': adapted, 'reasons': reasons, 'checks': c}
 
 
 # ---------------------------------------------------------------- one target
@@ -822,7 +943,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                 photo_region = Box(photo_region.x, photo_region.cy - nh / 2, photo_region.w, nh)
         if photo_region:
             for nid in hero['members']:
-                _set(out, nid, photo_region.list())
+                _set_photo(out, g.by_id[nid], photo_region.list())
 
     # --- overlay: copy goes where the photo's subject is not
     if a['style']['structure'] == 'overlay':
@@ -863,10 +984,50 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                 copy_region = Box(m, H * (1 - band), W - 2 * m, H * band - m) if cy_ < .55 else Box(m, m, W - 2 * m, H * band - m)
                 reasons.append('Copy placed ' + ('below' if cy_ < .55 else 'above') + ' the photo subject.')
 
+    # a photo that leaves no usable room for the copy goes (copy is the message)
+    if photo_region is not None and hero and (copy_region.w < max(40.0, W * .2) or copy_region.h < max(14.0, H * .12)):
+        for nid in hero['members']:
+            out[nid]['hidden'] = True
+        photo_region = None
+        copy_region = content
+        reasons.append('Photo dropped: no room for it beside the copy at this size.')
+    copy_region = Box(copy_region.x, copy_region.y, max(1.0, copy_region.w), max(1.0, copy_region.h))
     items = _copy_items(copy_groups, a, g, roles)
     row = copy_region.w / max(1.0, copy_region.h) > 2.6 and copy_region.h < 260
 
-    # --- logo: inside the row on banners, otherwise anchored to a corner of the copy
+    # --- logo: inside the row on banners, otherwise anchored to a corner of the copy.
+    # A light-on-dark logo made to sit on the photo stays on the photo (it would vanish on the copy background).
+    page_bg = (design.get('page') or {}).get('background', '#ffffff')
+
+    def on_photo_only(gr):
+        nodes_ = [g.by_id[x] for x in gr['members']]
+        if len(nodes_) != 1 or nodes_[0].type == 'image':
+            return False
+        n_ = nodes_[0]
+        col = n_.style.get('color', '#111') if n_.type == 'text' else n_.style.get('fill')
+        c_ = contrast(col, page_bg)
+        return c_ is not None and c_ < 2.5
+
+    for gr in list(logo):
+        if not on_photo_only(gr):
+            continue
+        logo.remove(gr)
+        it = Item(gr, g, roles)
+        it.align = 'left'
+        k_logo = max(s, 12 / max(1.0, it.box.h))
+        lw, lh = it.measure(k_logo, W)
+        pad = max(6.0, m * .6)
+        if photo_region and photo_region.w * .5 < lw and photo_region.w > 2 * pad:
+            k_logo *= (photo_region.w * .5) / lw
+            lw, lh = it.measure(k_logo, W)
+        if photo_region and lw + 2 * pad <= photo_region.w and lh + 2 * pad <= photo_region.h and it.min_font(k_logo) >= MIN_TEXT * .99 \
+                or photo_region and not it.texts and lw + 2 * pad <= photo_region.w and lh + 2 * pad <= photo_region.h:
+            right = 'right' in (gr.get('anchors') or []) and 'left' not in (gr.get('anchors') or [])
+            x = photo_region.r - pad - lw if right else photo_region.x + pad
+            it.place(out, x, photo_region.y + pad, lw, k_logo)
+            reasons.append('Logo stays on the photo: it is light artwork made for a dark background.')
+        else:
+            reasons.append('Logo dropped: it is light artwork made for the photo, and there is no room on the photo here.')
     if row:
         for gr in logo:
             it = Item(gr, g, roles)
@@ -957,24 +1118,47 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
             continue
         if cand:
             victim = cand[0]
+            if isinstance(victim, RepeatItem) and len(victim.cards) > 2:
+                victim.cards.pop()          # fewer cards before no cards
+                victim.refresh()
+                continue
             allitems.remove(victim)
-            dropped.append('cards' if victim.role == 'repeat' else victim.role)
+            dropped.extend(_names(victim, roles))
             continue
         if k < s * .3:
             break    # nothing left to drop: stop; the checks report what doesn't fit
         k *= .94
+    if not fit_all(k, gap):
+        # last resort: the headline alone (then the checks say what still doesn't fit)
+        keep = [it for it in allitems if it.role == 'headline'] or allitems[:1]
+        for it in allitems:
+            if it not in keep:
+                dropped.extend(_names(it, roles))
+        allitems[:] = keep
+        for _ in range(60):
+            if fit_all(k, gap) or k < s * .2:
+                break
+            k *= .94
     if dropped:
         reasons.append('Dropped to make room: ' + ', '.join(dict.fromkeys(dropped)) + '.')
-    if abs(k - s) / max(s, 1e-6) > .05:
-        reasons.append(f"Type scaled {k / s * 100:.0f}% of a plain resize so it reads well at this size.")
+    if k > s * 1.05:
+        reasons.append(f"Type set {k / s * 100:.0f}% of a plain resize so it reads well at this size.")
+    elif k < s * .95:
+        reasons.append(f"Type set {k / s * 100:.0f}% of a plain resize so everything fits (never under 12 px).")
     reps = [it for it in allitems if isinstance(it, RepeatItem)]
+    for it in reps:
+        if len(it.cards) < it.total:
+            what = 'items' if it.flex else 'cards'
+            reasons.append(f"Showing {len(it.cards)} of {it.total} {what} (the rest don't fit at a readable size).")
     region_of = {id(it): reg for its, reg in columns() for it in its}
     if split is not None and split in allitems:
         reasons.append('Cards placed beside the copy for the wider canvas.')
     for it in reps:
         cols, rows, *_ = it.layout(k, region_of[id(it)].w)
         if (cols, rows) != (it.orig_cols, math.ceil(len(it.cards) / max(1, it.orig_cols))):
-            reasons.append(f"{len(it.cards)} cards re-arranged as {rows} row{'s' if rows > 1 else ''} of {cols}.")
+            what = 'items' if it.flex else 'cards'
+            layout = f"{cols} column{'s' if cols > 1 else ''}" if it.flex else f"{rows} row{'s' if rows > 1 else ''} of up to {cols}"
+            reasons.append(f"{len(it.cards)} {what} re-arranged in {layout}.")
     valign = 'center'
     if a['style']['structure'] == 'overlay' or any('bottom' in groups[it.id].get('anchors', [])
                                                   for it in items if it.role == 'headline' and it.id in groups):
@@ -1009,12 +1193,76 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
 
 # ---------------------------------------------------------------- checks and baselines
 
+def _rgb(c):
+    c = str(c or '').strip().lstrip('#')
+    if len(c) == 3:
+        c = ''.join(ch * 2 for ch in c)
+    if len(c) != 6:
+        return None
+    try:
+        return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return None
+
+
+def contrast(c1, c2) -> float | None:
+    """WCAG contrast ratio of two #hex colours (None when either is unknown)."""
+    a_, b_ = _rgb(c1), _rgb(c2)
+    if a_ is None or b_ is None:
+        return None
+
+    def lum(rgb):
+        ch = [v / 255 for v in rgb]
+        ch = [v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4 for v in ch]
+        return .2126 * ch[0] + .7152 * ch[1] + .0722 * ch[2]
+    l1, l2 = sorted((lum(a_), lum(b_)), reverse=True)
+    return (l1 + .05) / (l2 + .05)
+
+
+def ink(n: dict):
+    """The colour a text or a flat logo is drawn in."""
+    st = n.get('style') or {}
+    return st.get('color', '#111') if n['type'] == 'text' else st.get('fill')
+
+
+def backdrop(design: dict, n: dict):
+    """Colour behind the centre of node n: the topmost visible flat shape under it, else the page (None over a photo)."""
+    x, y, w, h = n['box']
+    cx, cy = x + w / 2, y + h / 2
+    nodes = [m for m in design['nodes'] if m['type'] != 'group' and not m.get('hidden')]
+    idx = next((i for i, m in enumerate(nodes) if m['id'] == n['id']), len(nodes))
+    for m in reversed(nodes[:idx]):
+        if m['type'] not in ('shape', 'image'):
+            continue
+        bx, by, bw, bh = m['box']
+        if bx <= cx <= bx + bw and by <= cy <= by + bh:
+            if m['type'] == 'image':
+                return None
+            st = m.get('style') or {}
+            if float(st.get('opacity', 1) if st.get('opacity') is not None else 1) >= .5 and _rgb(st.get('fill')):
+                return st.get('fill')
+    return (design.get('page') or {}).get('background', '#ffffff')
+
+
+def _contrasts(design: dict, a: dict) -> dict:
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    out = {}
+    for n in design['nodes']:
+        if n['type'] == 'group' or n.get('hidden') or roles.get(n['id']) in ('decoration', 'background', 'panel'):
+            continue
+        if n['type'] == 'text' or (roles.get(n['id']) == 'logo' and n['type'] == 'shape'):
+            out[n['id']] = contrast(ink(n), backdrop(design, n))
+    return out
+
+
 def check(design: dict, a: dict, crops: dict) -> dict:
     W, H = design['page']['width'], design['page']['height']
     roles = {k: v['role'] for k, v in a['roles'].items()}
+    allowed = a.get('_base_overlaps', set())
+    base_c = a.get('_base_contrast', {})
     vis = [n for n in design['nodes'] if n['type'] != 'group' and not n.get('hidden')]
-    solid = [n for n in vis if roles.get(n['id']) not in ('background', 'panel', 'decoration') and n['type'] in ('text', 'image', 'shape')
-             and roles.get(n['id']) not in ('hero', 'image')]
+    solid = [n for n in vis if roles.get(n['id']) not in ('background', 'panel', 'decoration') and n['type'] in ('text', 'image', 'shape')]
+    photo = {n['id'] for n in solid if n['type'] == 'image' and roles.get(n['id']) in ('hero', 'image')}
     container_of = {t: c for c, ts in a['layers']['containers'].items() for t in ts}
     overlaps = []
     for i in range(len(solid)):
@@ -1022,17 +1270,24 @@ def check(design: dict, a: dict, crops: dict) -> dict:
             p, q = solid[i], solid[j]
             if container_of.get(p['id']) == q['id'] or container_of.get(q['id']) == p['id']:
                 continue
+            if (p['id'] in photo and roles.get(q['id']) == 'logo') or (q['id'] in photo and roles.get(p['id']) == 'logo'):
+                continue      # a logo placed on its photo on purpose
             A, B = Box.of(p['box']), Box.of(q['box'])
-            if A.inter(B) > 4:
+            if A.inter(B) > 4 and tuple(sorted((p['id'], q['id']))) not in allowed:
                 overlaps.append([p['id'], q['id']])
     off = [n['id'] for n in vis if roles.get(n['id']) not in ('background', 'decoration')
            and (n['box'][0] < -1 or n['box'][1] < -1 or n['box'][0] + n['box'][2] > W + 1 or n['box'][1] + n['box'][3] > H + 1)]
-    small = [n['id'] for n in vis if n['type'] == 'text' and float(n.get('style', {}).get('fontSize') or 99) < MIN_TEXT - .01]
+    small = [n['id'] for n in vis if n['type'] == 'text' and n.get('text', '').strip()
+             and drawn_size(n) < MIN_TEXT - .01 and roles.get(n['id']) != 'decoration']
     hidden = [n['id'] for n in design['nodes'] if n['type'] != 'group' and n.get('hidden')
               and roles.get(n['id']) not in ('decoration',)]
     kept = min(crops.values()) if crops else None
-    return {'overlaps': overlaps, 'off_canvas': off, 'small_text': small, 'dropped': hidden,
-            'subject_kept': kept, 'ok': not overlaps and not off and not small}
+    low = []      # text or logo that became hard to read where it now sits (worse than the designer had it)
+    for nid, c in _contrasts(design, a).items():
+        if c is not None and c < 3 and (base_c.get(nid) is None or c < base_c[nid] * .8):
+            low.append(nid)
+    return {'overlaps': overlaps, 'off_canvas': off, 'small_text': small, 'low_contrast': low, 'dropped': hidden,
+            'subject_kept': kept, 'ok': not overlaps and not off and not small and not low}
 
 
 def baselines(g, a: dict, W: float, H: float) -> dict:
@@ -1066,10 +1321,12 @@ def baselines(g, a: dict, W: float, H: float) -> dict:
 
 def adapt(design: dict, targets: list[dict]) -> dict:
     g = load(design)
-    src = g.to_json() if not (isinstance(design, dict) and 'nodes' in design) else design
+    src = g.to_json()                   # normalised: ids are strings, sizes are numbers, styles are clean
     a = analyze(g)
     base = check(src, a, {})            # overlaps the designer made on purpose are allowed to stay
     base_overlaps = {tuple(sorted(p)) for p in base['overlaps']}
+    a['_base_overlaps'] = base_overlaps
+    a['_base_contrast'] = _contrasts(src, a)
     return {'source': {'width': g.width, 'height': g.height},
             'analysis_notes': a['notes'],
             'results': [adapt_one(src, g, a, t, base_overlaps) for t in targets]}
