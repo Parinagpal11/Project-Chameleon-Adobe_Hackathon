@@ -98,3 +98,11 @@ body.xr { overflow: auto; min-height: 100%; }
   .xr-btn span[id] + span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* subject frames: one calm outline per subject, readable on any photo */
+.xr-overlay .subj .halo { fill: none; stroke: rgba(0,0,0,.45); stroke-width: 4; vector-effect: non-scaling-stroke; }
+.xr-overlay .subj .frame { fill: rgba(250,204,21,.08); stroke: #facc15; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.xr-overlay .subj.dim .frame { stroke-dasharray: 6 5; fill: none; stroke: rgba(250,204,21,.85); }
+.xr-overlay .pill rect { fill: rgba(17,17,20,.86); }
+.xr-overlay .pill circle { fill: #facc15; }
+.xr-overlay .pill text { fill: #fff; font-weight: 600; }

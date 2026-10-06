@@ -447,6 +447,54 @@ class RealPhotoTests(unittest.TestCase):
             self.assertEqual(self.detect('flat-blue.jpg', crop)[0]['source'], 'assumed')
 
 
+class PhotoGoldenTests(unittest.TestCase):
+    """Every photo Pari has tested, pinned. A change to subject detection must keep all of these.
+    (method, number of separate subjects, where the subject's centre must be, image-relative)"""
+    GOLDEN = {
+        'portrait-woman.jpg':        ('faces', 1, (.55, .85), (.2, .55)),
+        'product-sneaker.jpg':       ('saliency', 0, (.3, .6), (.6, .8)),
+        'landscape-tent.jpg':        ('saliency', 0, (.7, .82), (.5, .6)),
+        'flat-blue.jpg':             ('assumed', 0, None, None),
+        'fashion-street.jpg':        ('faces', 1, (.15, .4), (.08, .32)),
+        'latte-overhead.jpg':        ('saliency', 0, (.62, .95), (.05, .45)),
+        'earbuds-gradient.jpg':      ('saliency', 0, (.3, .65), (.6, .88)),
+        'two-people-cafe.jpg':       ('faces', 2, None, (.1, .5)),
+        'bw-portrait.jpg':           ('faces', 1, (.55, .85), (.15, .55)),
+        'runner-sunrise.jpg':        ('people', 1, (.13, .2), (.58, .74)),
+        'wide-runner-synthetic.jpg': ('saliency', 0, (.24, .29), (.6, .7)),
+    }
+
+    def test_every_tested_photo_keeps_its_result(self):
+        try:
+            import cv2
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x not installed')
+        from PIL import Image
+        photos = ROOT / 'tests' / 'fixtures' / 'photos'
+        # each photo twice: the committed copy, and re-encoded at its original upload size the way the
+        # browser sends it (small pixel differences once flipped a result, so both must hold)
+        upload_size = {'two-people-cafe.jpg': (1254, 1254), 'runner-sunrise.jpg': (1672, 941)}
+        for name, (source, n_parts, cx_range, cy_range) in self.GOLDEN.items():
+          for variant in ('committed', 'upload'):
+            with self.subTest(photo=name, variant=variant):
+                raw = (photos / name).read_bytes()
+                if variant == 'upload':
+                    im = Image.open(photos / name).convert('RGB')
+                    size = upload_size.get(name, (1122, 1402) if im.height > im.width else (im.width * 1400 // max(im.size), im.height * 1400 // max(im.size)))
+                    buf = io.BytesIO(); im.resize(size).save(buf, 'JPEG', quality=88); raw = buf.getvalue()
+                subject._cache.clear()
+                r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(raw).decode())
+                self.assertEqual(r['source'], source)
+                self.assertEqual(len(r.get('parts') or []), n_parts)
+                x, y, w, h = r['box']
+                if cx_range: self.assertTrue(cx_range[0] <= x + w / 2 <= cx_range[1], (x + w / 2, cx_range))
+                if cy_range: self.assertTrue(cy_range[0] <= y + h / 2 <= cy_range[1], (y + h / 2, cy_range))
+                if name == 'two-people-cafe.jpg':
+                    centres = sorted(p[0] + p[2] / 2 for p in r['parts'])
+                    self.assertLess(centres[0], .4); self.assertGreater(centres[1], .6)   # one person each side
+
+
 class AnalyzeHTTPTests(unittest.TestCase):
     def test_endpoints(self):
         from local_server import ThreadingHTTPServer, Handler

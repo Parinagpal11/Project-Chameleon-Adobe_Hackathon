@@ -49,9 +49,29 @@ def _open(src: str):
             bg = Image.new('RGB', im.size, (255, 255, 255)); bg.paste(im, mask=im.split()[-1]); im = bg
         im = im.convert('RGB')
         im.thumbnail((WORK_SIZE, WORK_SIZE))
+        if max(im.size) < WORK_SIZE:   # small uploads: enlarge to the working size so results don't depend on it
+            k = WORK_SIZE / max(im.size)
+            im = im.resize((max(1, round(im.size[0] * k)), max(1, round(im.size[1] * k))), Image.LANCZOS)
         return im
     except Exception:
         return None
+
+
+_models: dict = {}
+
+
+def _model(kind: str):
+    """OpenCV detectors are loaded once per process (loading the XML each time cost ~0.3 s per photo)."""
+    if kind not in _models:
+        import cv2
+        if kind == 'people':
+            m = cv2.HOGDescriptor()
+            m.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+        else:
+            name = {'face': 'haarcascade_frontalface_default.xml', 'eye': 'haarcascade_eye.xml'}[kind]
+            m = cv2.CascadeClassifier(cv2.data.haarcascades + name)
+        _models[kind] = m
+    return _models[kind]
 
 
 def _looks_like_skin(img, face, need: float = .3) -> bool:
@@ -84,7 +104,7 @@ def _faces(img):
         return None
     try:
         grey = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2GRAY)
-        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        cascade = _model('face')
         side = max(24, min(grey.shape) // 20)          # ignore "faces" smaller than 5% of the photo
         found = cascade.detectMultiScale(grey, 1.1, 6, minSize=(side, side))
     except Exception:
@@ -94,18 +114,58 @@ def _faces(img):
         found = cascade.detectMultiScale(grey, 1.1, 10, minSize=(side, side))
     else:
         found = [f for f in found if _looks_like_skin(img, f)]   # Haar alone fires on grass, rocks, fabric
+    # and a face must show at least one eye in its upper half: ice cubes in a caramel latte pass the
+    # face and skin tests, but have no eyes (Pari's round-3 false positive)
+    eyes = _model('eye')
+    def has_eye(f):
+        x, y, w, h = (int(v) for v in f)
+        roi = grey[y:y + int(h * .6), x:x + w]
+        return len(eyes.detectMultiScale(roi, 1.1, 3, minSize=(max(8, w // 10),) * 2)) >= 1
+    # faces too small for reliable eye detection must instead survive a much stricter face pass
+    strict = cascade.detectMultiScale(grey, 1.1, 9, minSize=(side, side))
+    def strong(f):
+        return any(_iou([*f], [*s]) >= .5 for s in strict)
+    found = [f for f in found if has_eye(f) or (f[2] < 60 and strong(f))]
+    if len(found):   # faces much smaller than the main one are background people, not the subject
+        biggest = max(f[2] for f in found)
+        found = [f for f in found if f[2] >= biggest * .5]
     if len(found) == 0:
         return None
     W, H = img.size
-    # each face sits at the top of a person: extend every face on its own (down and a little sideways),
-    # then take the union, so two people far apart don't swallow the whole photo
+    # each face gets its own box: the detected face plus modest padding for hair and chin, the way
+    # face-aware croppers frame a face (focus on the head, not the torso). The union is only used to
+    # describe "everyone"; crops and markers use the separate faces.
     boxes = []
-    for fx, fy, fw, fh in found:
-        boxes.append((max(0, fx - fw * .25), max(0, fy - fh * .25), min(W, fx + fw * 1.25), min(H, fy + fh * 2.0)))   # head + shoulders
+    for fx, fy, fw, fh in sorted(found, key=lambda f: f[0]):        # numbered left to right
+        boxes.append((max(0, fx - fw * .25), max(0, fy - fh * .3), min(W, fx + fw * 1.25), min(H, fy + fh * 1.3)))
     parts = [[float(b[0] / W), float(b[1] / H), float((b[2] - b[0]) / W), float((b[3] - b[1]) / H)] for b in boxes]
     x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
     x1 = max(b[2] for b in boxes); y1 = max(b[3] for b in boxes)
     return [float(x0 / W), float(y0 / H), float((x1 - x0) / W), float((y1 - y0) / H)], parts
+
+
+def _people(img, min_score: float = 1.3) -> list:
+    """Full-body people (OpenCV HOG). The image is enlarged so small figures reach the 64x128 window."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return []
+    if not hasattr(cv2, 'HOGDescriptor'):
+        return []
+    W, H = img.size
+    s = 1800 / max(W, H)
+    grey = cv2.cvtColor(np.asarray(img.resize((int(W * s), int(H * s)))), cv2.COLOR_RGB2GRAY)
+    hog = _model('people')
+    try:
+        rects, weights = hog.detectMultiScale(grey, winStride=(8, 8), padding=(8, 8), scale=1.05)
+    except Exception:
+        return []
+    out = []
+    for (x, y, w, h), q in zip(rects, np.ravel(weights)):
+        if q >= min_score:
+            out.append([float(x / s / W), float(y / s / H), float(w / s / W), float(h / s / H)])
+    return out
 
 
 def _rgb_to_lab(rgb):
@@ -311,6 +371,17 @@ def _detect(src: str) -> dict:
     bx, by, bw, bh = box
     if (bh > .95 and bw < .15) or (bw > .95 and bh < .15):
         conf = 0.0   # a thin strip along a whole edge is a gradient or a border, not a subject
+    if bw * bh > .8:
+        conf = 0.0   # "the whole photo" is texture (grass, fabric) or a frame-filling object: no single subject to crop around
+    if conf < .5:
+        # colour saliency is unsure (a small person in a big scene matches the scene's colours):
+        # try the full-body person detector. Only here: on clear product shots it misfires (a sneaker heel).
+        people = _people(img)
+        if people:
+            x0 = min(p[0] for p in people); y0 = min(p[1] for p in people)
+            x1 = max(p[0] + p[2] for p in people); y1 = max(p[1] + p[3] for p in people)
+            return {'box': [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)], 'source': 'people',
+                    'confidence': 0.7, 'aspect': aspect, 'parts': [[round(v, 4) for v in p] for p in people]}
     if conf < .1:   # nothing clearly stands out: keep the centre rather than a random patch
         return {'box': CENTRE, 'source': 'assumed', 'confidence': conf, 'aspect': aspect}
     return {'box': [round(v, 4) for v in box], 'source': 'saliency', 'confidence': conf, 'aspect': aspect}

@@ -597,7 +597,8 @@ def _notes(g, layers, roles, groups, grid, style, subjects) -> list[str]:
             notes.append(f"{label} is anchored {'-'.join(reversed(corner)) if corner[0] in ('left', 'right') else '-'.join(corner)}.")
     for iid, sub in subjects.items():
         if sub['source'] != 'assumed':
-            how = {'given': 'marked in the design', 'faces': 'found by face detection', 'saliency': 'found by saliency'}[sub['source']]
+            how = {'given': 'marked in the design', 'faces': 'found by face detection', 'people': 'found by person detection',
+                   'saliency': 'found by saliency'}[sub['source']]
             notes.append(f"Subject of photo “{iid}” {how}.")
     if layers['decoration']:
         notes.append(f"{len(layers['decoration'])} decorative element(s) can move or drop when space is tight.")
@@ -630,12 +631,15 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
                 # given by the designer (relative to the slot as shown) or photo not readable:
                 # no crop decision; the renderer keeps its default cover fit
                 cx, cy, cw, ch = 0.0, 0.0, 1.0, 1.0
-            bx, by, bw, bh = sub['box']
-            # subject inside the shown crop, clipped to it, then onto the page
-            x0, y0 = max(0.0, (bx - cx) / cw), max(0.0, (by - cy) / ch)
-            x1, y1 = min(1.0, (bx + bw - cx) / cw), min(1.0, (by + bh - cy) / ch)
-            sub['page_box'] = Box(n.box.x + x0 * n.box.w, n.box.y + y0 * n.box.h,
-                                  max(0.0, x1 - x0) * n.box.w, max(0.0, y1 - y0) * n.box.h).list()
+            def to_page(b):   # image-relative box -> inside the shown crop (clipped) -> page coordinates
+                bx, by, bw, bh = b
+                x0, y0 = max(0.0, (bx - cx) / cw), max(0.0, (by - cy) / ch)
+                x1, y1 = min(1.0, (bx + bw - cx) / cw), min(1.0, (by + bh - cy) / ch)
+                return Box(n.box.x + x0 * n.box.w, n.box.y + y0 * n.box.h,
+                           max(0.0, x1 - x0) * n.box.w, max(0.0, y1 - y0) * n.box.h).list()
+            sub['page_box'] = to_page(sub['box'])
+            if sub.get('parts'):   # each face separately, only those still visible in the crop
+                sub['page_parts'] = [pb for pb in (to_page(pp) for pp in sub['parts']) if pb[2] > 1 and pb[3] > 1]
             subjects[n.id] = sub
     texts = sorted((n for n in g.leaves() if n.type == 'text'), key=lambda n: -n.font_size)
     result = {

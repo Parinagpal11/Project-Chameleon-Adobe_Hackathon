@@ -8,7 +8,7 @@
   const LAYERS = [
     { key: 'groups', label: 'Groups', on: true, swatch: '#7c3aed' },
     { key: 'roles', label: 'Roles', on: false, swatch: '#0284c7' },
-    { key: 'lines', label: 'Alignment lines', on: true, swatch: '#06b6d4' },
+    { key: 'lines', label: 'Alignment lines', on: false, swatch: '#06b6d4' },
     { key: 'margins', label: 'Margins', on: false, swatch: '#f97316' },
     { key: 'anchors', label: 'Anchors', on: false, swatch: '#22c55e' },
     { key: 'order', label: 'Reading order', on: true, swatch: '#94a3b8' },
@@ -79,6 +79,17 @@
     return g;
   }
 
+  function pill(parent, x, y, text, k, opts = {}) {   // compact dark label with a yellow dot
+    const fs = 11 * k, padX = 7 * k, h = fs + 9 * k, dot = 6 * k;
+    const w = text.length * fs * .56 + padX * 2 + dot + 5 * k;
+    const ty = opts.below ? y : y - h;
+    const g = svg('g', { class: 'pill' }, parent);
+    svg('rect', { x, y: ty, width: w, height: h, rx: h / 2 }, g);
+    svg('circle', { cx: x + padX + dot / 2, cy: ty + h / 2, r: dot / 2 }, g);
+    const t = svg('text', { x: x + padX + dot + 5 * k, y: ty + h / 2 + fs * .36, 'font-size': fs }, g);
+    t.textContent = text;
+  }
+
   function drawOverlay() {
     const o = $('xr-overlay'); o.replaceChildren();
     const a = S.analysis; if (!a) return;
@@ -113,15 +124,30 @@
       }
     }
     if (S.on.subjects) {
+      // one clean frame per subject (each face separately), label outside so it never covers the subject
+      const frames = [];
       for (const [id, s] of Object.entries(a.subjects)) {
-        const [x, y, w, h] = s.page_box, c = '#facc15', L = Math.min(w, h) * .18;
-        const p = `M${x} ${y + L}V${y}H${x + L} M${x + w - L} ${y}H${x + w}V${y + L} M${x + w} ${y + h - L}V${y + h}H${x + w - L} M${x + L} ${y + h}H${x}V${y + h - L}`;
-        svg('path', { d: p, stroke: '#000', 'stroke-width': 5, fill: 'none', opacity: .35 }, o);
-        svg('path', { d: p, stroke: c, 'stroke-width': 3, fill: 'none' }, o);
-        svg('circle', { cx: x + w / 2, cy: y + h / 2, r: 4 * k, fill: c, stroke: '#000', 'stroke-width': 1 }, o);
-        // label outside the brackets so it never covers the subject: below if there's room, else above
-        const below = y + h + 24 * k < H;
-        tag(o, x, below ? y + h + 6 * k : y - 6 * k, `subject · ${s.source}`, '#a16207', k, { below });
+        const boxes = s.page_parts && s.page_parts.length ? s.page_parts : [s.page_box];
+        const many = boxes.length > 1;
+        boxes.forEach((b, i) => frames.push({ b, text: s.source === 'faces' ? (many ? `Face ${i + 1}` : 'Face') : s.source === 'people' ? (many ? `Person ${i + 1}` : 'Person') : (s.source === 'assumed' ? 'Centre (no subject found)' : 'Subject'), dim: s.source === 'assumed' }));
+      }
+      // labels avoid the design's other elements (logo, text, buttons) and each other
+      const photoIds = new Set(Object.keys(a.subjects));
+      const avoid = a.groups.filter(g => !g.members.some(m => photoIds.has(m))).map(g => g.box);
+      const placed = [];
+      const hits = (bx, by, bw, bh) => [...avoid, ...placed].some(([ax, ay, aw, ah]) => bx < ax + aw && bx + bw > ax && by < ay + ah && by + bh > ay);
+      for (const { b: [x, y, w, h], text, dim } of frames) {
+        const r = Math.min(10 * k, w / 6, h / 6);
+        const G = svg('g', { class: 'subj' + (dim ? ' dim' : '') }, o);
+        svg('rect', { x, y, width: w, height: h, rx: r, class: 'halo' }, G);
+        svg('rect', { x, y, width: w, height: h, rx: r, class: 'frame' }, G);
+        const ph = 20 * k, pw = text.length * 11 * k * .56 + 25 * k, gap = 6 * k;
+        const spots = [                                   // [x, top-of-pill]
+          [x, y - gap - ph], [x, y + h + gap], [x + 6 * k, y + 6 * k], [x + w - pw, y - gap - ph], [x + w - pw, y + h + gap],
+        ].filter(([sx, sy]) => sy >= 0 && sy + ph <= H && sx >= 0 && sx + pw <= W + 1);
+        const [sx, sy] = spots.find(([sx, sy]) => !hits(sx, sy, pw, ph)) || spots[0] || [x + 6 * k, y + 6 * k];
+        placed.push([sx, sy, pw, ph]);
+        pill(G, sx, sy, text, k, { below: true });
       }
     }
     if (S.on.groups) {
@@ -162,10 +188,6 @@
     if (S.on.order) {
       const byId = Object.fromEntries(a.groups.map((g, i) => [g.id, { g, i }]));
       const pts = a.reading_order.map(id => byId[id]).filter(Boolean);
-      svg('polyline', { points: pts.map(({ g }) => `${g.box[0] + g.box[2] / 2},${g.box[1] + g.box[3] / 2}`).join(' '),
-        fill: 'none', stroke: 'rgba(255,255,255,.85)', 'stroke-width': 4 }, o);
-      svg('polyline', { points: pts.map(({ g }) => `${g.box[0] + g.box[2] / 2},${g.box[1] + g.box[3] / 2}`).join(' '),
-        fill: 'none', stroke: '#111827', 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }, o);
       pts.forEach(({ g, i }, n) => {
         const r = 11 * k, cx = g.box[0] + r * .2, cy = g.box[1] + r * .2;
         svg('circle', { cx, cy, r, fill: color(i), stroke: '#fff', 'stroke-width': 2 }, o);
@@ -196,7 +218,7 @@
       el('span', { class: 'xr-pill', text: `${a.grid.alignment} aligned` }),
       meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null,
       S.mine && a.subjects[S.mine] ? el('span', { class: 'xr-pill mine', role: 'status',
-        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
+        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', people: 'found by person detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
     $('xr-notes').replaceChildren(...a.notes.map(n => el('li', { text: n })));
     $('xr-gcount').textContent = a.groups.length;
     const orderPos = Object.fromEntries(a.reading_order.map((id, i) => [id, i + 1]));
@@ -213,7 +235,7 @@
     }));
     $('xr-tiers').replaceChildren(...(a.targets || []).map(t => {
       const k = Math.min(40 / t.width, 32 / t.height);
-      return el('li', { class: 'xr-tier', title: t.strategy },
+      return el('li', { class: 'xr-tier' },
         el('span', { class: 'xr-shape', 'aria-hidden': 'true' }, el('i', { style: `width:${Math.max(3, t.width * k)}px;height:${Math.max(3, t.height * k)}px` })),
         el('span', {}, el('b', { text: t.name || `${t.width}×${t.height}` }),
           el('small', { text: `${t.width}×${t.height} · ${t.reasons.join(' · ')}` })),

@@ -22,3 +22,7 @@ eval/out/
 # Secrets
 .env
 .env.*
+
+# original photos dropped in for testing (small copies are committed)
+tests/fixtures/photos/_originals/
+frontend/_qa/
