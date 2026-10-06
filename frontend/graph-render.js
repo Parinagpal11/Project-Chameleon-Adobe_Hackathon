@@ -84,7 +84,9 @@
       const label = (n.meta && n.meta.label) || n.role || 'image';
       const fs = Math.max(10, Math.min(w, h) * .09);
       ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255,255,255,.78)';
+      const hm = /^#?([0-9a-f]{6})$/i.exec(base), hv = hm ? parseInt(hm[1], 16) : 0;
+      const lum = hm ? (.299 * ((hv >> 16) & 255) + .587 * ((hv >> 8) & 255) + .114 * (hv & 255)) / 255 : 0;
+      ctx.fillStyle = lum > .6 ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.8)';   // readable on light and dark placeholders
       ctx.fillText(label, x + w / 2, y + h - Math.max(fs * 1.2, h * .1));
     }
     ctx.restore();

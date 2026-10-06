@@ -311,6 +311,86 @@ class SubjectTests(unittest.TestCase):
         self.assertEqual(subject.find_subject(node)['source'], 'assumed')
 
 
+class RealPhotoTests(unittest.TestCase):
+    """Regression set from Pari's manual test round (generated photos, 800 px copies).
+    Each is also checked after the browser-style crop to the 1080x1350 slot + JPEG re-save,
+    which is exactly what “Use your photo” sends."""
+    PHOTOS = ROOT / 'tests' / 'fixtures' / 'photos'
+
+    def detect(self, name, browser_crop):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Pillow not installed')
+        im = Image.open(self.PHOTOS / name).convert('RGB')
+        if browser_crop:
+            W, H = im.size; a = 1080 / 1350
+            if W / H > a: sw = H * a; im = im.crop(((W - sw) / 2, 0, (W + sw) / 2, H))
+            else: sh = W / a; im = im.crop((0, (H - sh) / 2, W, (H + sh) / 2))
+        buf = io.BytesIO(); im.save(buf, 'JPEG', quality=88)
+        subject._cache.clear()
+        return subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()), im.size
+
+    def covers(self, box, truth, size, need=.85):
+        (x, y, w, h), (W, H) = box, size
+        tx0, ty0, tx1, ty1 = truth
+        ix = max(0, min(x + w, tx1) - max(x, tx0)) * max(0, min(y + h, ty1) - max(y, ty0))
+        return ix / ((tx1 - tx0) * (ty1 - ty0)) >= need
+
+    def test_portrait_face(self):
+        try:
+            import cv2
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x not installed')
+        for crop in (False, True):
+            r, size = self.detect('portrait-woman.jpg', crop)
+            self.assertEqual(r['source'], 'faces')
+            x, y, w, h = r['box']
+            self.assertGreater(x + w / 2, .55)          # she stands on the right
+
+    def test_black_and_white_and_duotone_portraits(self):
+        try:
+            import cv2
+            from PIL import Image, ImageOps
+            if not hasattr(cv2, 'CascadeClassifier'): raise ImportError
+        except ImportError:
+            self.skipTest('OpenCV 4.x / Pillow not installed')
+        w = Image.open(self.PHOTOS / 'portrait-woman.jpg').convert('RGB')
+        for im in (ImageOps.grayscale(w).convert('RGB'), ImageOps.colorize(ImageOps.grayscale(w), '#0b1d51', '#a8c8ff')):
+            buf = io.BytesIO(); im.save(buf, 'JPEG', quality=88); subject._cache.clear()
+            r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
+            self.assertEqual(r['source'], 'faces')
+
+    def test_tent_tight_at_every_slot_shape(self):
+        from PIL import Image
+        base = Image.open(self.PHOTOS / 'landscape-tent.jpg').convert('RGB')
+        for a in (0.8, 600 / 628, 1.0, 1.91):
+            W, H = base.size
+            im = base.crop(((W - H * a) / 2, 0, (W + H * a) / 2, H)) if W / H > a else base.crop((0, (H - W / a) / 2, W, (H + W / a) / 2))
+            buf = io.BytesIO(); im.save(buf, 'JPEG', quality=88); subject._cache.clear()
+            r = subject._detect('data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode())
+            self.assertEqual(r['source'], 'saliency', a)
+            self.assertLess(r['box'][2] * r['box'][3], .08, (a, r['box']))
+
+    def test_landscape_tent_is_not_a_face(self):
+        for crop in (False, True):
+            r, size = self.detect('landscape-tent.jpg', crop)
+            self.assertEqual(r['source'], 'saliency', crop)
+            truth = (.67, .515, .83, .585) if not crop else (.665, .515, .835, .585)
+            self.assertTrue(self.covers(r['box'], truth, size), r['box'])
+            self.assertLess(r['box'][2] * r['box'][3], .06)   # tight around the small tent
+
+    def test_product_keeps_the_whole_sneaker(self):
+        r, size = self.detect('product-sneaker.jpg', False)
+        self.assertEqual(r['source'], 'saliency')
+        self.assertTrue(self.covers(r['box'], (.17, .555, .83, .84), size, need=.95), r['box'])
+
+    def test_flat_background(self):
+        for crop in (False, True):
+            self.assertEqual(self.detect('flat-blue.jpg', crop)[0]['source'], 'assumed')
+
+
 class AnalyzeHTTPTests(unittest.TestCase):
     def test_endpoints(self):
         from local_server import ThreadingHTTPServer, Handler

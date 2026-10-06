@@ -54,6 +54,26 @@ def _open(src: str):
         return None
 
 
+def _looks_like_skin(img, face, need: float = .3) -> bool:
+    """A real face has a decent share of skin-coloured pixels (YCrCb range works across skin tones)."""
+    import numpy as np
+    x, y, w, h = (int(v) for v in face)
+    core = img.crop((x + w // 5, y + h // 5, x + w - w // 5, y + h - h // 5)).convert('YCbCr')
+    a = np.asarray(core, dtype=int)
+    if a.size == 0:
+        return False
+    cb, cr = a[..., 1], a[..., 2]
+    skin = (cr >= 133) & (cr <= 180) & (cb >= 75) & (cb <= 130)
+    return skin.mean() >= need
+
+
+def _is_monochrome(img) -> bool:
+    """Greyscale, sepia-free duotone or tinted photos: chroma barely varies across the image."""
+    import numpy as np
+    a = np.asarray(img.convert('YCbCr').resize((64, 64)), dtype=float)
+    return a[..., 1].std() < 4 and a[..., 2].std() < 4
+
+
 def _faces(img):
     try:
         import cv2
@@ -65,9 +85,15 @@ def _faces(img):
     try:
         grey = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2GRAY)
         cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        found = cascade.detectMultiScale(grey, 1.1, 5, minSize=(max(24, grey.shape[1] // 30),) * 2)
+        side = max(24, min(grey.shape) // 20)          # ignore "faces" smaller than 5% of the photo
+        found = cascade.detectMultiScale(grey, 1.1, 6, minSize=(side, side))
     except Exception:
         return None
+    if _is_monochrome(img):
+        # black-and-white / duotone: skin colour can't be judged, so demand much stronger Haar evidence
+        found = cascade.detectMultiScale(grey, 1.1, 10, minSize=(side, side))
+    else:
+        found = [f for f in found if _looks_like_skin(img, f)]   # Haar alone fires on grass, rocks, fabric
     if len(found) == 0:
         return None
     W, H = img.size
@@ -203,7 +229,8 @@ def box_from_map(grid, w, h):
         changed = False
         best_mean = best_mass / len(best)
         for mass, comp in comps[1:]:
-            strong = mass >= best_mass * .5          # an equally important second object, anywhere
+            # an equally important second object, anywhere: as much salience AND as intense
+            strong = mass >= best_mass * .5 and mass / len(comp) >= best_mean * .75
             if not strong and (mass < best_mass * .03 or mass / len(comp) < best_mean * .5): continue
             cx0 = min(x for x, _ in comp); cx1 = max(x for x, _ in comp)
             cy0 = min(y for _, y in comp); cy1 = max(y for _, y in comp)
@@ -212,6 +239,19 @@ def box_from_map(grid, w, h):
             if strong or (gap_x <= near_x and gap_y <= near_y):
                 x0, x1, y0, y1 = min(x0, cx0), max(x1, cx1), min(y0, cy0), max(y1, cy1)
                 changed = True
+    # hysteresis: grow into weaker but connected salience (a white toe cap, a pale sleeve)
+    low = thr * .5
+    frontier = [(x, y) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1) if (x, y) in hot]
+    grown = set(frontier)
+    while frontier:
+        x, y = frontier.pop()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in grown and grid[ny][nx] >= low:
+                grown.add((nx, ny)); frontier.append((nx, ny))
+    gx0, gx1 = min(x0, min(x for x, _ in grown)), max(x1, max(x for x, _ in grown))
+    gy0, gy1 = min(y0, min(y for _, y in grown)), max(y1, max(y for _, y in grown))
+    if (gx1 - gx0 + 1) * (gy1 - gy0 + 1) <= 1.8 * (x1 - x0 + 1) * (y1 - y0 + 1):   # extend, don't flood a busy scene
+        x0, x1, y0, y1 = gx0, gx1, gy0, gy1
     pad_x, pad_y = max(1, round((x1 - x0 + 1) * .12)), max(1, round((y1 - y0 + 1) * .12))
     x0, x1 = max(0, x0 - pad_x), min(w - 1, x1 + pad_x)
     y0, y1 = max(0, y0 - pad_y), min(h - 1, y1 + pad_y)
