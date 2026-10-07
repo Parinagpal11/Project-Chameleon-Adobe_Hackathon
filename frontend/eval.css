@@ -63,7 +63,12 @@ tbody tr:last-child td { border-bottom: 0; }
   .ev-how dd { margin-bottom: 6px; }
 }
 @media (max-width: 640px) {
-  .ev .xr-brand strong, .ev .xr-sub { display: inline; }
-  .ev .xr-top { flex-wrap: nowrap; height: 56px; padding: 0 10px; }
+  .ev .xr-top { flex-wrap: nowrap; height: 56px; padding: 0 10px; gap: 2px; }
   .ev .xr-btn span[id] + span { display: none; }
+  .ev .xr-btn { padding: 0 9px; }
+  .ev-scroll { position: relative; }
+  .ev-swipe { display: block; }
 }
+@media (max-width: 380px) { .ev .xr-sub { display: none; } }
+.ev-swipe { display: none; color: var(--faint); font-size: 12px; margin: 0 0 6px; }
+.ev-cell small { font-size: 12px; }

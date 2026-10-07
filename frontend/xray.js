@@ -280,6 +280,8 @@
     $('tab-resize').tabIndex = v === 'resize' ? 0 : -1;
     $('xr-main').hidden = v !== 'understand';
     $('xr-resize').hidden = v !== 'resize';
+    const dm = location.hash.match(/d=([\w-]+)/);
+    if (dm) history.replaceState(null, '', '#d=' + dm[1] + (v === 'resize' ? '&v=resize' : ''));
     if (v === 'resize') runAdapt(); else fit();
   }
   function fitScale(w, h, box = 260, boxH = 220) { return Math.min(box / w, boxH / h); }
@@ -321,11 +323,16 @@
       const scoreTag = (sc) => {
         if (!sc) return null;
         const t = tag(`Score ${Math.round(sc.overall)}`, 'score');
+        t.tabIndex = 0;
         t.title = `Content ${Math.round(sc.content)} · Legibility ${Math.round(sc.legibility)} · Faithfulness ${Math.round(sc.faithfulness)} · Composition ${Math.round(sc.composition)}` +
           (sc.subject != null ? ` · Subject ${Math.round(sc.subject)}` : '') + (sc.notes.length ? '\n' + sc.notes.join(' ') : '');
+        t.setAttribute('aria-label', `Score ${Math.round(sc.overall)} out of 100. ` + t.title.replace(/\n/g, ' '));
+        t.onclick = () => { const open = t.dataset.open === '1'; t.dataset.open = open ? '' : '1';
+          t.textContent = open ? `Score ${Math.round(sc.overall)}` : t.title.split('\n')[0]; };   // touch: tap to see the parts
+        t.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t.onclick(); } };
         return t;
       };
-      if (r.score) { chamTags.unshift(scoreTag(r.score)); sumC += r.score.overall; sumB += Math.max(b.stretch.score.overall, b.crop.score.overall, b.letterbox.score.overall); nS++; }
+      if (r.score) { chamTags.unshift(scoreTag(r.score)); sumC += r.score.overall; sumB += Math.max(b.stretch.score.overall, b.crop.score.overall); nS++; }
       const stretchTags = [scoreTag(b.stretch.score), tag(b.stretch.distortion > 1.02 ? `Distorted ${b.stretch.distortion.toFixed(2)}×` : 'No distortion', b.stretch.distortion > 1.15 ? 'bad' : '')];
       const cropTags = [scoreTag(b.crop.score), tag(b.crop.cut.length ? `${b.crop.cut.length} element${b.crop.cut.length > 1 ? 's' : ''} cut off` : 'Nothing cut off', b.crop.cut.length ? 'bad' : '')];
       if (b.crop.subject_kept != null) cropTags.push(tag(`Subject ${Math.round(b.crop.subject_kept * 100)}% kept`, b.crop.subject_kept < .95 ? 'bad' : ''));
@@ -337,7 +344,7 @@
         el('ul', { class: 'rz-why' }, ...r.reasons.map(x => el('li', { text: x }))));
     });
     const stat = (n, label) => el('div', { class: 'rz-stat' }, el('b', { text: n }), el('small', { text: label }));
-    $('rz-score').replaceChildren(...(nS ? [stat(`${Math.round(sumC / nS)} vs ${Math.round(sumB / nS)}`, 'score: Chameleon vs best naive')] : []),
+    $('rz-score').replaceChildren(...(nS ? [stat(`${Math.round(sumC / nS)} vs ${Math.round(sumB / nS)}`, 'avg score: Chameleon vs better of stretch / crop')] : []),
       stat(`${ok}/${res.results.length}`, 'sizes pass every check'),
       stat(`${stretched}`, 'sizes distorted by stretching'), stat(`${cropCut}`, 'sizes where cropping cuts content'),
       ...(nKept ? [stat(`${Math.round(keptAll / nKept * 100)}%`, 'photo subject kept (avg)')] : []));
@@ -363,7 +370,7 @@
   }
   async function pick(id) {
     S.mine = null;
-    try { await show(await api('/testset/' + encodeURIComponent(id))); history.replaceState(null, '', '#d=' + id); }
+    try { await show(await api('/testset/' + encodeURIComponent(id))); history.replaceState(null, '', '#d=' + id + (S.view === 'resize' ? '&v=resize' : '')); }
     catch (e) { showError(e.message); }
   }
 

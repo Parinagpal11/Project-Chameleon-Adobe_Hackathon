@@ -67,75 +67,121 @@ def used_share(design: dict, a: dict) -> float:
 
 def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subject_kept=None,
           allowed_overlaps: set = frozenset(), frame: float = 1.0) -> dict:
-    """`frame`: share of the canvas the design actually covers (letterbox leaves empty bars)."""
-    from .adapt import drawn_size, contrast, ink, backdrop, MIN_TEXT
+    """Score one resized design against the original.
+
+    `distortion` and `frame` describe how the design is put on the canvas, which the node data alone can't
+    show: a naive stretch draws everything scaled unevenly (distortion = the larger axis ratio), a letterbox
+    leaves empty bars (frame = share of the canvas covered). Chameleon's output is drawn 1:1 (photos are
+    cropped, never stretched), so it is scored with 1.0 for both.
+    `subject_kept` is None only when the original has no photo subject; a dropped photo is 0."""
+    from .adapt import drawn_size, contrast, ink, backdrop, MIN_TEXT, subject_boxes
     W, H = float(design['page']['width']), float(design['page']['height'])
     canvas = Box(0, 0, W, H)
     roles = {k: v['role'] for k, v in a['roles'].items()}
     out = {n['id']: n for n in design['nodes']}
     leaves = [n for n in original['nodes'] if n['type'] != 'group' and roles.get(n['id']) not in SKIP]
+    bg_photos = [n for n in original['nodes'] if n['type'] == 'image' and roles.get(n['id']) == 'background']
+    container_of = {t: c_ for c_, ts in a['layers']['containers'].items() for t in ts}
     notes = []
+    size_cache = {}
+
+    def dsize(n):
+        if n['id'] not in size_cache:
+            size_cache[n['id']] = drawn_size(n)
+        return size_cache[n['id']]
+
+    def present(n):
+        return n is not None and not n.get('hidden') and 'box' in n and n['box'][2] > 0 and n['box'][3] > 0
+
+    solids = {i: Box.of(n['box']) for i, n in out.items() if present(n) and n['type'] in ('text', 'shape')
+              and roles.get(i) not in SKIP}
+
+    def buried(n):
+        """Text half hidden under another element (not its own button)."""
+        b = Box.of(n['box'])
+        for j, q in solids.items():
+            if j == n['id'] or container_of.get(n['id']) == j or container_of.get(j) == n['id']:
+                continue
+            if tuple(sorted((n['id'], j))) in allowed_overlaps:
+                continue
+            if b.inter(q) > b.area * .1:
+                return True
+        return False
+
+    def low_contrast(n):
+        c = contrast(ink(n), backdrop(design, n))
+        return c is not None and c < 2.0
 
     def shown(nid, readable=True):
         n = out.get(nid)
-        if not n or n.get('hidden') or 'box' not in n:
+        if not present(n):
             return 0.0
         b = Box.of(n['box'])
-        if b.area <= 0:
-            return 0.0
         inside = b.inter(canvas) / b.area
         if n['type'] == 'text':
             if inside < .98:
                 return 0.0                     # a cut line of text is lost
             if not readable:
                 return 1.0
-            size = drawn_size(n)               # and so is text too small to read
+            if low_contrast(n) or buried(n):
+                return 0.0                     # so is text you can't see
+            size = dsize(n)                    # or too small to read
             return 1.0 if size >= MIN_TEXT - .01 else (.5 if size >= 9 else 0.0)
         return inside
 
-    # content
-    tot = sum(_w(roles.get(n['id'])) for n in leaves) or 1.0
-    kept = sum(_w(roles.get(n['id'])) * shown(n['id']) for n in leaves)
-    content = kept / tot
-    lost = [roles.get(n['id']) or n['id'] for n in leaves if shown(n['id'], False) < .5]
+    # content: the message, including the full-bleed photo
+    items = leaves + bg_photos
+    tot = sum(_w(roles.get(n['id'])) if n not in bg_photos else 2.0 for n in items)
+    kept = sum((_w(roles.get(n['id'])) if n not in bg_photos else 2.0) * shown(n['id']) for n in items)
+    content = kept / tot if tot else 1.0
+    lost = [('photo' if roles.get(n['id']) in ('hero', 'image', 'background') else roles.get(n['id']) or n['id'])
+            for n in items if shown(n['id'], False) < .5]
     if lost:
         notes.append('Missing or cut: ' + ', '.join(dict.fromkeys(lost)) + '.')
 
     # legibility
-    texts = [out[n['id']] for n in leaves if n['type'] == 'text' and shown(n['id'], False) > 0 and (n.get('text') or '').strip()]
-    readable = tw = 0.0
-    small = 0
+    orig_texts = [n for n in leaves if n['type'] == 'text' and (n.get('text') or '').strip()]
+    texts = [out[n['id']] for n in orig_texts if shown(n['id'], False) > 0]
+    readable = 0.0
+    small = faint = hidden_under = 0
     for n in texts:
         wgt = _w(roles.get(n['id']))
-        tw += wgt
-        size_ok = drawn_size(n) >= MIN_TEXT - .01
-        c = contrast(ink(n), backdrop(design, n))
-        ok = size_ok and (c is None or c >= 2.5) and distortion <= 1.05
+        size_ok = dsize(n) >= MIN_TEXT - .01
+        lc, bu = low_contrast(n), buried(n)
+        ok = size_ok and not lc and not bu and distortion <= 1.05
         small += not size_ok
-        readable += wgt * (1.0 if ok else (0.5 if size_ok and distortion <= 1.3 else 0.0))
-    legibility = readable / tw if tw else 1.0
+        faint += lc
+        hidden_under += bu
+        readable += wgt * (1.0 if ok else (0.5 if size_ok and not lc and not bu and distortion <= 1.3 else 0.0))
+    tw_all = sum(_w(roles.get(n['id'])) for n in orig_texts)
+    legibility = readable / tw_all if tw_all else 1.0          # text that was cut away can't be read either
     if small:
         notes.append(f'{small} text{"s" if small > 1 else ""} under 12 px.')
+    if faint:
+        notes.append(f'{faint} text{"s" if faint > 1 else ""} hard to read on {"their" if faint > 1 else "its"} background.')
+    if hidden_under:
+        notes.append(f'{hidden_under} text{"s" if hidden_under > 1 else ""} partly covered.')
     if distortion > 1.05:
         notes.append(f'Letters and shapes stretched {distortion:.2f}x.')
 
-    # faithfulness: reading order, type hierarchy, shapes
+    # faithfulness: reading order, type hierarchy, shapes, scaled by how much of the design is there at all
     groups = [gr for gr in a['groups'] if not all(roles.get(m) in SKIP for m in gr['members'])]
     nb = {}
     for gr in groups:
         bs = [Box.of(out[m]['box']) for m in gr['members'] if m in out and shown(m, False) > 0]
         if bs:
             nb[gr['id']] = Box.bound(bs)
+    present_share = len(nb) / len(groups) if groups else 1.0
     from .understand import reading_order
     # reading order of the copy (photos may move beside or above it; that is a re-flow, not a reshuffle)
-    nb = {gid: b for gid, b in nb.items()
-          if not any(roles.get(m) in ('hero', 'image') for m in next(gr['members'] for gr in groups if gr['id'] == gid))}
-    orig_order = [g for g in a['reading_order'] if g in nb]
-    order = _pairs_kept(orig_order, reading_order([{'id': gid, 'box': b} for gid, b in nb.items()]))
-    by_size_orig = sorted((n for n in leaves if n['type'] == 'text' and n['id'] in out and shown(n['id'], False) > 0),
+    copy_nb = {gid: b for gid, b in nb.items()
+               if not any(roles.get(m) in ('hero', 'image') for m in next(gr['members'] for gr in groups if gr['id'] == gid))}
+    orig_order = [g for g in a['reading_order'] if g in copy_nb]
+    order = _pairs_kept(orig_order, reading_order([{'id': gid, 'box': b} for gid, b in copy_nb.items()]))
+    by_size_orig = sorted((n for n in orig_texts if n['id'] in out and shown(n['id'], False) > 0),
                           key=lambda n: -float((n.get('style') or {}).get('fontSize') or 0))
     fs0 = {n['id']: float((n.get('style') or {}).get('fontSize') or 0) for n in by_size_orig}
-    fs1 = {n['id']: drawn_size(out[n['id']]) for n in by_size_orig}
+    fs1 = {n['id']: dsize(out[n['id']]) for n in by_size_orig}
     hp = hk = 0
     for i in range(len(by_size_orig)):
         for j in range(i + 1, len(by_size_orig)):
@@ -146,7 +192,7 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
             hk += fs1[p] >= fs1[q] * .97    # bigger stays bigger (or equal when both sit at the 12 px floor)
     hierarchy = hk / hp if hp else 1.0
     shapes = max(0.0, 1 - (distortion - 1) / 1.5)       # stretched 1.3x keeps 80%; 2.5x and beyond keeps nothing
-    faithfulness = (order + hierarchy) / 2 * shapes
+    faithfulness = (order + hierarchy) / 2 * shapes * (1.0 if nb or not groups else 0.0)   # nothing left: nothing kept
     if order < .9:
         notes.append('Reading order changed.')
     if hierarchy < .9:
@@ -155,10 +201,9 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     # composition
     vis = [out[n['id']] for n in leaves if shown(n['id'], False) > 0]
     vb = {n['id']: Box.of(n['box']) for n in vis}
-    container_of = {t: c_ for c_, ts in a['layers']['containers'].items() for t in ts}
     photo = {i for i in vb if roles.get(i) in ('hero', 'image')}
     ids = list(vb)
-    pairs = clash = 0
+    clash = 0
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
             p, q = ids[i], ids[j]
@@ -166,37 +211,66 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
                 continue
             if (p in photo and roles.get(q) == 'logo') or (q in photo and roles.get(p) == 'logo'):
                 continue
-            pairs += 1
             clash += vb[p].inter(vb[q]) > 4
-    no_overlap = 1 - (clash / pairs if pairs else 0.0)
-    inside = sum(1 for b in vb.values() if b.inter(canvas) >= b.area * .99) / max(1, len(vb))
+    no_overlap = max(0.0, 1 - .25 * clash)                     # every overlap costs a quarter
+    inside = sum(1 for b in vb.values() if b.inter(canvas) >= b.area * .99) / len(vb) if vb else 1.0
     edge = .015 * min(W, H)
     roomy = [b for i, b in vb.items() if i not in photo]
     margins = sum(1 for b in roomy if b.x >= edge - .5 and b.y >= edge - .5 and b.r <= W - edge + .5 and b.b <= H - edge + .5) \
-        / max(1, len(roomy))
+        / len(roomy) if roomy else 1.0
     used = Box.bound(list(vb.values())).inter(canvas) / (W * H) if vb else 0.0
-    bg = [n for n in design['nodes'] if roles.get(n['id']) == 'background' and not n.get('hidden') and 'box' in n]
+    bg = [n for n in design['nodes'] if roles.get(n['id']) == 'background' and present(n)]
     if bg:
         used = max(used, max(Box.of(n['box']).inter(canvas) for n in bg) / (W * H))
-    # the canvas should be used about as fully as the designer used theirs (empty letterbox bars count against)
+    # the canvas should be used about as fully as the designer used theirs
     target = min(.55, max(.15, a.get('_orig_used', .55) * .85))
-    fill = min(1.0, used / target) * (frame if frame < .98 else 1.0)
-    composition = (no_overlap + inside + margins + fill) / 4
+    fill = min(1.0, used / target)
+    # copy should not cover the photo subject more than the designer's own layout did
+    under = _subject_under_copy(out, a)
+    excess = max(0.0, under - a.get('_orig_under', 0.0) - .03)
+    clear = max(0.0, 1 - 3 * excess)
+    composition = (no_overlap + inside + margins + fill + clear) / 5 * frame   # empty letterbox bars count against
     if clash:
         notes.append(f'{clash} overlap{"s" if clash > 1 else ""}.')
     if fill < .7:
         notes.append(f'Only {used * 100:.0f}% of the canvas is used.')
+    if frame < .98:
+        notes.append(f'Empty bars: the design covers {frame * 100:.0f}% of the canvas.')
+    if excess > 0:
+        notes.append(f'Copy covers {under * 100:.0f}% of the photo subject.')
 
     parts = {'content': content, 'legibility': legibility, 'faithfulness': faithfulness, 'composition': composition}
     if subject_kept is not None:
         parts['subject'] = float(subject_kept)
     wsum = sum(PARTS[k] for k in parts)
     overall = sum(PARTS[k] * v for k, v in parts.items()) / wsum
+    # the headline and the button carry the message: losing one costs more than its share
+    for role, keep in (('headline', .7), ('cta', .85)):
+        ids_ = [n['id'] for n in leaves if roles.get(n['id']) == role and n['type'] == 'text']
+        if ids_ and max(shown(i) for i in ids_) < .5:
+            overall *= keep
+            notes.append(f'The {"headline" if role == "headline" else "button"} is lost.')
     res = {k: round(v * 100, 1) for k, v in parts.items()}
     res['subject'] = res.get('subject')
     res['overall'] = round(overall * 100, 1)
     res['notes'] = notes
     return res
+
+
+def _subject_under_copy(out: dict, a: dict) -> float:
+    """Share of the photo subjects' area that has text or a button drawn over it."""
+    from .adapt import subject_boxes
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    parts = subject_boxes(out, a)
+    if not parts:
+        return 0.0
+    copy_ = [Box.of(n['box']) for n in out.values() if not n.get('hidden') and 'box' in n and n['type'] in ('text', 'shape')
+             and roles.get(n['id']) not in ('background', 'panel', 'decoration', 'logo')]
+    tot = sum(q.area for _, q in parts) or 1.0
+    cov = 0.0
+    for _, q in parts:
+        cov += min(q.area, sum(q.inter(c) for c in copy_))
+    return cov / tot
 
 
 def baseline_designs(original: dict, W: float, H: float) -> dict:

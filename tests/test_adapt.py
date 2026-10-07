@@ -157,7 +157,7 @@ class AdaptTestSet(unittest.TestCase):
                     if role in ('panel', 'background'):
                         continue
                     name = 'photo' if role in ('hero', 'image') else role
-                    self.assertTrue(name in text or 'cards' in text or 'showing' in text or 'logo dropped' in text,
+                    self.assertTrue(name in text or 'cards' in text or 'card captions' in text or 'showing' in text or 'logo dropped' in text,
                                     (i, res['width'], res['height'], nid, role, res['reasons']))
 
     def test_photos_are_cropped_not_stretched_and_src_not_repeated(self):

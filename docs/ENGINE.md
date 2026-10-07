@@ -85,13 +85,15 @@ Building blocks: text stacks re-wrap; buttons re-size around their label; a grou
 
 | Part | Weight | What it measures |
 |---|---|---|
-| Content | 25% | How much of the message is still there, not cut off and readable. Headline, button, logo, offer and photo count most; legal and decoration least. |
-| Legibility | 25% | Share of the text that draws at 12 px or more (measured the way the renderer draws), undistorted, with enough contrast. |
-| Faithfulness | 20% | Reading order of the copy and type hierarchy kept (sizes within 15% count as equal), multiplied by shape fidelity: stretched 1.3× keeps 80%, 2.5× keeps nothing. |
-| Composition | 20% | No overlaps, nothing off canvas, room at the edges, and the canvas used about as fully as the original (empty letterbox bars count against). |
-| Photo subject | 10% | Share of each photo's subject still visible (left out when there is no photo). |
+| Content | 25% | How much of the message is still there, not cut off, readable (12 px, enough contrast) and not covered. Headline, button, logo, offer and photos (full-bleed ones too) count most; legal and decoration least. Losing the headline costs a further 30% of the overall score, the button 15%. |
+| Legibility | 25% | Share of the original text that draws at 12 px or more (measured the way the renderer draws), undistorted, not covered by another element, with enough contrast. Text cut away counts as unreadable. |
+| Faithfulness | 20% | Reading order of the copy and type hierarchy kept (sizes within 15% count as equal), multiplied by shape fidelity: stretched 1.3× keeps 80%, 2.5× keeps nothing. Zero when nothing of the design is left. |
+| Composition | 20% | No overlaps (each costs a quarter), nothing off canvas, room at the edges, the canvas used about as fully as the original, and copy kept off the photo subject (no more than in the original). Multiplied by the share of the canvas the design covers, so empty letterbox bars count against. |
+| Photo subject | 10% | Share of each photo's subject still visible. A dropped photo is 0; left out only when the original has no photo. |
 
-**Evaluation report.** `GET /eval` scores every test design at the 8 sizes (cached until a design or the engine changes); `/report` shows it: the averages, each part, every design × size with Chameleon's lead over the best naive resize, and the ten lowest cases to fix next. On the 12 seed designs: Chameleon 97.6, letterbox 81.4, centre crop 73.1, stretch 58.9; Chameleon scores highest in 81 of 96 cases, ties in 15 (the original size, or a shape so close that a plain resize already works) and never scores lower.
+Distortion and letterbox framing are properties of how a design is drawn, not of its node data, so the baselines pass them in (`distortion`, `frame`); Chameleon draws 1:1 and crops photos, never stretching them.
+
+**Evaluation report.** `GET /eval` scores every test design at the 8 sizes (cached until a design or the engine changes); `/report` shows it: the averages, each part, every design × size with Chameleon's lead over the best naive resize, and the ten lowest cases to fix next. On the 12 seed designs: Chameleon 96.3, letterbox 69.7, stretch 55.2, centre crop 45.6; Chameleon scores highest in 81 of 96 cases, ties in 15 (where a naive resize already keeps everything: the original size, or a shape close enough) and never scores lower.
 
 ## 4. Test set
 

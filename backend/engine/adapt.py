@@ -26,11 +26,11 @@ from pathlib import Path
 
 from .graph import Box, load
 from .plan import plan_tier
-from .subject import smart_crop
+from .subject import smart_crop, reframe
 from .understand import analyze
 
 MIN_TEXT = 12.0
-DROP_ORDER = ['decoration', 'legal', 'caption', 'body', 'item', 'price', 'eyebrow', 'badge', 'repeat', 'subhead', 'offer']
+DROP_ORDER = ['decoration', 'legal', 'caption', 'body', 'item', 'price', 'eyebrow', 'repeat', 'subhead', 'badge', 'offer']
 
 # ---------------------------------------------------------------- text measurement
 # Advance widths of the fonts the studio loads (tools/make_font_metrics.py), so wrapped text boxes match what the
@@ -321,6 +321,8 @@ class Item:
     def place_uniform(self, out: dict, gx: float, y: float, u: float):
         """Every member scaled by u about the group's top-left, which lands at (gx, y)."""
         for n in self.members:
+            if n.id in self.dropped:
+                continue
             b = n.box
             nb = [gx + (b.x - self.box.x) * u, y + (b.y - self.box.y) * u, b.w * u, b.h * u]
             if n.type == 'text':
@@ -369,6 +371,20 @@ class RepeatItem:
     def refresh(self):
         self.members = [m for c in self.cards for m in c.members]
         self.orig_cols = min(self.orig_cols, len(self.cards))
+
+    def can_go_captionless(self) -> bool:
+        return not self.flex and all(c.texts and any(n.type == 'image' for n in c.members) for c in self.cards)
+
+    def go_captionless(self):
+        """Small canvases: keep the photos of the cards (speakers' faces, products) and drop their captions,
+        so the cards can shrink below what 12 px captions would allow."""
+        for c in self.cards:
+            c.dropped |= {n.id for n in c.members if n.type == 'text'}
+            c.box = Box.bound([n.box for n in c.members if n.id not in c.dropped])
+        self.box = Box.bound([c.box for c in self.cards])
+        self.cw = max(c.box.w for c in self.cards)
+        self.ch = max(c.box.h for c in self.cards)
+        self.captionless = True
 
     def importance(self) -> float:
         return DROP_ORDER.index('repeat')
@@ -632,6 +648,7 @@ def preserve_one(design: dict, g, a: dict, W: float, H: float, base_overlaps: se
         res = finish(design, g, a, out, W, H)
         if res['checks']['ok']:
             res['k'] = 1.0
+            res['exact'] = True
             return res
     for kt in cands:
         out = _fresh(design)
@@ -731,6 +748,58 @@ def _decorate(out, g, a, W, H, sx, sy, u, copy_region, hero_map=None):
         _set(out, did, nb.list(), fs=fs)
 
 
+def subject_boxes(out: dict, a: dict) -> list:
+    """Where each photo's subject parts land on the canvas, through the slot and crop chosen for it."""
+    res = []
+    for nid, sub in a['subjects'].items():
+        n = out.get(nid)
+        if not n or n.get('hidden') or 'box' not in n or sub.get('source') == 'assumed':
+            continue
+        x, y, w, h = n['box']
+        cx, cy, cw, ch = n.get('crop') or [0, 0, 1, 1]
+        for pb in sub.get('parts') or [sub['box']]:
+            q = Box(x + (pb[0] - cx) / cw * w, y + (pb[1] - cy) / ch * h, pb[2] / cw * w, pb[3] / ch * h)
+            if q.inter(Box(x, y, w, h)) > 0:
+                res.append((nid, q))
+    return res
+
+
+def _logos_off_subjects(out: dict, a: dict, W: float, H: float, reasons: list):
+    """A logo never sits on a face or the product: move it to the photo's (or canvas's) clearest corner."""
+    parts = subject_boxes(out, a)
+    if not parts:
+        return
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    for gr in a['groups']:
+        if gr['role'] != 'logo':
+            continue
+        mem = [out[m] for m in gr['members'] if m in out and not out[m].get('hidden') and 'box' in out[m]]
+        if not mem:
+            continue
+        lb = Box.bound([Box.of(m['box']) for m in mem])
+        hits = [(pid, q) for pid, q in parts if lb.inter(q) > q.area * .03]
+        if not hits:
+            continue
+        fx, fy, fw, fh = out[hits[0][0]]['box']
+        x0, y0 = max(0.0, fx), max(0.0, fy)
+        x1, y1 = min(W, fx + fw), min(H, fy + fh)
+        pad = max(6.0, min(W, H) * .03)
+        others = [Box.of(m['box']) for m in out.values() if not m.get('hidden') and m['type'] in ('text', 'shape')
+                  and 'box' in m and m['id'] not in gr['members'] and roles.get(m['id']) not in ('background', 'panel', 'decoration')]
+        for nx, ny in ((x0 + pad, y0 + pad), (x1 - pad - lb.w, y0 + pad), (x0 + pad, y1 - pad - lb.h), (x1 - pad - lb.w, y1 - pad - lb.h)):
+            cand = Box(nx, ny, lb.w, lb.h)
+            if nx < 0 or ny < 0 or cand.r > W or cand.b > H:
+                continue
+            if any(cand.inter(q) > 0 for _, q in parts) or any(cand.inter(o) > 0 for o in others):
+                continue
+            dx, dy = nx - lb.x, ny - lb.y
+            for m in mem:
+                b = m['box']
+                m['box'] = [round(b[0] + dx, 2), round(b[1] + dy, 2), b[2], b[3]]
+            reasons.append('Logo moved to a clear corner so it stays off the photo subject.')
+            break
+
+
 def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: list | None = None):
     """Photo crops around subjects, src handling, checks."""
     reasons = reasons if reasons is not None else []
@@ -744,12 +813,29 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         ob = g.by_id[nid].box
         img_aspect = sub.get('aspect') or (ob.w / max(1.0, ob.h))
         c = smart_crop(sub['box'], img_aspect, slot, sub.get('parts'))
+        if nid in a['layers']['background'] and sub.get('source') != 'assumed':
+            # copy sits on this photo: reframe so the subject is clear of it
+            nbx = Box.of(nb)
+            avoid = []
+            for m in out.values():
+                if m.get('hidden') or m['type'] in ('group', 'image') or m['id'] == nid or 'box' not in m:
+                    continue
+                if a['roles'].get(m['id'], {}).get('role') in ('background', 'panel', 'decoration'):
+                    continue
+                q = Box.of(m['box'])
+                if q.inter(nbx) > 0:
+                    avoid.append([(q.x - nbx.x) / nbx.w, (q.y - nbx.y) / nbx.h, q.w / nbx.w, q.h / nbx.h])
+            r = reframe(sub['box'], img_aspect, slot, sub.get('parts'), avoid)
+            if r['crop'] != c['crop']:
+                reasons.append('Photo reframed so its subject sits clear of the copy.')
+            c = r
         n['crop'] = c['crop']
         crops[nid] = c['kept']
         if sub.get('source') != 'assumed' and c['kept'] >= .999:
             reasons.append(f"Photo cropped around its subject ({sub['source']}): 100% kept.")
         elif sub.get('source') != 'assumed':
             reasons.append(f"Photo cropped around its subject: {c['kept'] * 100:.0f}% kept (the rest doesn't fit this shape).")
+    _logos_off_subjects(out, a, W, H, reasons)
     nodes = [out[n['id']] for n in design['nodes']]
     for n in nodes:      # photos are not repeated per size: the client re-attaches them by id
         if n.get('src'):
@@ -814,9 +900,13 @@ def attach_scores(res: dict, original: dict, a: dict):
     from .score import score, baseline_designs
     W, H = res['width'], res['height']
     allowed = a.get('_base_overlaps', set())
-    res['score'] = score(res['design'], original, a, 1.0, res['checks'].get('subject_kept'), allowed)
+    has_subject = bool(a['subjects'])
+    kept_c = res['checks'].get('subject_kept')
+    if has_subject and kept_c is None:
+        kept_c = 0.0                       # every photo was dropped: its subject is lost
+    res['score'] = score(res['design'], original, a, 1.0, kept_c, allowed)
     for name, (d, distortion, frame) in baseline_designs(original, W, H).items():
-        kept = res['baselines']['crop']['subject_kept'] if name == 'crop' else (1.0 if a['subjects'] else None)
+        kept = res['baselines']['crop']['subject_kept'] if name == 'crop' else (1.0 if has_subject else None)
         res['baselines'].setdefault(name, {})['score'] = score(d, original, a, distortion, kept, allowed, frame)
 
 
@@ -832,12 +922,18 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
         if res is not None:
             s = min(W / g.width, H / g.height)
             same = abs(W - g.width) < .5 and abs(H - g.height) < .5
-            reasons = [head, 'Original size: layout kept as designed.' if same else
-                       'Layout kept: every element stays anchored to the edges it hugs; text re-wraps in its own lane.']
+            if same and res.get('exact'):
+                kept_msg = 'Original size: layout kept as designed.'
+            elif same:
+                kept_msg = 'Original size: layout kept, with what breaks a rule here fixed (text raised to 12 px, nothing off the canvas).'
+            else:
+                kept_msg = 'Layout kept: every element stays anchored to the edges it hugs; text re-wraps in its own lane.'
+            reasons = [head, kept_msg]
             if abs(res['k'] - s) / max(s, 1e-6) > .03:
                 reasons.append(f"Type scaled {res['k'] / s * 100:.0f}% of a plain resize so it fills the new shape.")
             res['reasons'] = list(dict.fromkeys(reasons + res['reasons']))
             res.pop('k')
+            res.pop('exact', None)
             return {**meta, **res}
     res = reflow_one(design, g, a, W, H, tier)
     res['reasons'] = list(dict.fromkeys([head] + res['reasons']))
@@ -1142,7 +1238,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
     protected = ('headline', 'cta')
     # wide canvas without a hero photo: cards go beside the copy, like a photo would
     split = None
-    if not row and hero is None and a['style']['structure'] != 'overlay' and aspect >= 1.25:
+    if not row and hero is None and a['style']['structure'] != 'overlay' and aspect >= 1.15:
         split = next((it for it in items if isinstance(it, RepeatItem) and not it.flex), None)
 
     def columns():
@@ -1178,6 +1274,10 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
             continue
         if cand:
             victim = cand[0]
+            if isinstance(victim, RepeatItem) and victim.can_go_captionless() and not getattr(victim, 'captionless', False):
+                victim.go_captionless()
+                dropped.append('card captions')
+                continue
             if isinstance(victim, RepeatItem) and len(victim.cards) > 2:
                 victim.cards.pop()          # fewer cards before no cards
                 victim.refresh()
@@ -1387,8 +1487,9 @@ def adapt(design: dict, targets: list[dict]) -> dict:
     base_overlaps = {tuple(sorted(p)) for p in base['overlaps']}
     a['_base_overlaps'] = base_overlaps
     a['_base_contrast'] = _contrasts(src, a)
-    from .score import used_share
+    from .score import used_share, _subject_under_copy
     a['_orig_used'] = used_share(src, a)
+    a['_orig_under'] = _subject_under_copy({n['id']: n for n in src['nodes']}, a)
     return {'source': {'width': g.width, 'height': g.height},
             'analysis_notes': a['notes'],
             'results': [adapt_one(src, g, a, t, base_overlaps) for t in targets]}

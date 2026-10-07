@@ -29,7 +29,7 @@
     const fact = (n, label) => el('span', { class: 'ev-fact' }, el('b', { text: n }), ' ' + label);
     $('ev-tiles').replaceChildren(...METHODS.map(tile), el('div', { class: 'ev-facts' },
       fact(`${rep.wins}`, `cases where Chameleon scores highest`),
-      fact(`${rep.ties}`, `ties (the original size, or a shape so close that a plain resize already works)`),
+      fact(`${rep.ties}`, `ties, where a naive resize already keeps everything (the original size, or a shape close enough)`),
       fact(`${rep.losses}`, `cases where a naive resize scores higher`),
       fact(`${rep.checks_ok}/${rep.cases}`, `pass every check (no overlap, all inside, text ≥ 12 px)`)));
 

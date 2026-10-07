@@ -252,6 +252,7 @@ def _units(g: Graph, layers: dict, roles: dict | None = None) -> list[dict]:
     for u in units:
         nodes = [g.by_id[m] for m in u['members']]
         u['logo'] = any((roles or {}).get(n.id, {}).get('role') == 'logo' for n in nodes)
+        u['cta'] = any((roles or {}).get(n.id, {}).get('role') == 'cta' for n in nodes)
         u['box'] = Box.bound(n.box for n in nodes)
         u['textual'] = any(n.type == 'text' for n in nodes)
         u['image'] = all(n.type == 'image' for n in nodes)
@@ -278,6 +279,8 @@ def _should_join(a: dict, b: dict, g: Graph, others, dividers: list[Box] = ()) -
     """`others` is a callable returning the boxes of all other units (only needed for row checks)."""
     if a['logo'] or b['logo']:
         return False      # a logo is always its own block: it gets anchored, not re-flowed with copy
+    if a.get('container') and b.get('container') and not (a.get('cta') and b.get('cta')):
+        return False      # two filled boxes (cards, badges) are two things; only a set of buttons moves as one
     A, B = a['box'], b['box']
     short = min(g.width, g.height)
     pa = g.width * g.height
@@ -286,6 +289,8 @@ def _should_join(a: dict, b: dict, g: Graph, others, dividers: list[Box] = ()) -
         if A.inter(B) > 0:
             return True
         big, small = max(a['fs'], b['fs']), min(a['fs'], b['fs'])
+        if bool(a.get('container')) != bool(b.get('container')) and big > 1.6 * small and not (a.get('cta') or b.get('cta')):
+            return False  # a big headline and a small card or badge are separate things, however close
         upper, lower = (A, B) if A.y <= B.y else (B, A)
         vgap = lower.y - upper.b
         aligned = (abs(A.x - B.x) <= tol or abs(A.cx - B.cx) <= tol or abs(A.r - B.r) <= tol

@@ -541,6 +541,55 @@ def _detect(src: str) -> dict:
     return {'box': [round(v, 4) for v in box], 'source': 'saliency', 'confidence': conf, 'aspect': aspect}
 
 
+def reframe(subject: list, image_aspect: float, slot_aspect: float, parts: list | None, avoid: list) -> dict:
+    """Like smart_crop, but also keeps the subject out from under `avoid` (copy laid over the photo).
+
+    `avoid` boxes are slot-relative [x, y, w, h] in 0-1. The window may zoom in (down to 62% of the
+    largest window) and move on both axes, as a designer would reframe a photo behind text. The subject
+    is never cut more than smart_crop would cut it. Returns {crop, kept, under}: `under` is the share of
+    the subject still under the copy."""
+    base = smart_crop(subject, image_aspect, slot_aspect, parts)
+    parts = parts or [subject]
+    if not avoid or not (image_aspect > 0 and slot_aspect > 0):
+        return {**base, 'under': 0.0}
+    tot = sum(p[2] * p[3] for p in parts) or 1.0
+
+    def measure(c):
+        cx, cy, cw, ch = c
+        kept = under = 0.0
+        for px, py, pw, ph in parts:
+            ix0, iy0 = max(px, cx), max(py, cy)
+            ix1, iy1 = min(px + pw, cx + cw), min(py + ph, cy + ch)
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+            kept += (ix1 - ix0) * (iy1 - iy0)
+            # the visible part, in slot coordinates
+            q = ((ix0 - cx) / cw, (iy0 - cy) / ch, (ix1 - ix0) / cw, (iy1 - iy0) / ch)
+            for ax, ay, aw, ah in avoid:
+                ox = max(0.0, min(q[0] + q[2], ax + aw) - max(q[0], ax))
+                oy = max(0.0, min(q[1] + q[3], ay + ah) - max(q[1], ay))
+                under += ox * oy * cw * ch          # back to image units
+        return kept / tot, min(1.0, under / tot)
+    k0, u0 = measure(base['crop'])
+    best = (u0, 0, 0.0, base['crop'], k0)
+    if u0 < .02:
+        return {**base, 'under': round(u0, 3)}
+    bw, bh = base['crop'][2], base['crop'][3]
+    for zi, z in enumerate((1.0, .92, .85, .78, .7, .62)):
+        cw, ch = bw * z, bh * z
+        for i in range(21):
+            for j in range(21):
+                cx, cy = (1 - cw) * i / 20, (1 - ch) * j / 20
+                k, u = measure((cx, cy, cw, ch))
+                if k < min(.98, k0) - 1e-6:
+                    continue
+                d = abs(cx - base['crop'][0]) + abs(cy - base['crop'][1])
+                key = (round(u, 2), zi, d)
+                if key < best[:3]:
+                    best = (round(u, 2), zi, d, [round(cx, 4), round(cy, 4), round(cw, 4), round(ch, 4)], k)
+    return {'crop': best[3], 'kept': round(best[4], 3), 'under': round(measure(best[3])[1], 3)}
+
+
 def _iou(a, b) -> float:
     ix = max(0.0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])) * max(0.0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
     u = a[2] * a[3] + b[2] * b[3] - ix
@@ -571,16 +620,30 @@ def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: li
             ix = max(0.0, min(px + pw, cx + cw) - max(px, cx)) * max(0.0, min(py + ph, cy + ch) - max(py, cy))
             tot += a; got += ix
         return got / tot if tot > 0 else 1.0
+    def sliced(pos):
+        """How much of the subject is cut through by the window edge (a face sliced in half looks broken)."""
+        cx, cy = (pos, 0.0) if wide else (0.0, pos)
+        tot = bad = 0.0
+        for px, py, pw, ph in parts:
+            a = pw * ph
+            ix = max(0.0, min(px + pw, cx + cw) - max(px, cx)) * max(0.0, min(py + ph, cy + ch) - max(py, cy))
+            f = ix / a if a > 0 else 1.0
+            tot += a
+            if .05 < f < .95:
+                bad += a * min(f, 1 - f)
+        return bad / tot if tot > 0 else 0.0
     sx, sy, sw, sh = subject
     centre = (sx + sw / 2 if wide else sy + sh / 2) - size / 2
     best = min(max(centre, 0.0), 1.0 - size)
     best_kept = covered(best)
-    if best_kept < .999:          # not everything fits: search positions for the one that keeps the most
+    if best_kept < .999:          # not everything fits: keep the most, without slicing through a face or object
         steps = 60
+        best_val = best_kept - sliced(best)
         for i in range(steps + 1):
             pos = (1.0 - size) * i / steps
             k = covered(pos)
-            if k > best_kept + 1e-6 or (abs(k - best_kept) <= 1e-6 and abs(pos - centre) < abs(best - centre)):
-                best, best_kept = pos, k
+            v = k - sliced(pos)
+            if v > best_val + 1e-6 or (abs(v - best_val) <= 1e-6 and abs(pos - centre) < abs(best - centre)):
+                best, best_kept, best_val = pos, k, v
     cx, cy = (best, 0.0) if wide else (0.0, best)
     return {'crop': [round(cx, 4), round(cy, 4), round(cw, 4), round(ch, 4)], 'kept': round(best_kept, 3)}

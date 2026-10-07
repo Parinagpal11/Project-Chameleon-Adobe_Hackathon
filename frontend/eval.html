@@ -41,11 +41,11 @@
     <details class="ev-how">
       <summary>How each part is measured</summary>
       <dl>
-        <dt>Content</dt><dd>How much of the message is still there, not cut off and readable. Headline, button, logo, offer and photo count most; legal and decoration least.</dd>
-        <dt>Legibility</dt><dd>Share of the text that draws at 12 px or more, undistorted, on a background it can be read on.</dd>
+        <dt>Content</dt><dd>How much of the message is still there, not cut off, readable and uncovered. Headline, button, logo, offer and photos count most; legal and decoration least. Losing the headline or the button also cuts the overall score.</dd>
+        <dt>Legibility</dt><dd>Share of the original text that draws at 12 px or more, undistorted, uncovered, on a background it can be read on. Text that was cut away counts as unreadable.</dd>
         <dt>Faithfulness</dt><dd>The original's reading order and type hierarchy are kept, and nothing is stretched out of shape.</dd>
-        <dt>Composition</dt><dd>No overlaps, nothing off the canvas, room at the edges, and the canvas used about as fully as the original (empty letterbox bars count against).</dd>
-        <dt>Photo subject</dt><dd>How much of each photo's subject (face, person, product) is still visible.</dd>
+        <dt>Composition</dt><dd>No overlaps (each costs a quarter), nothing off the canvas, room at the edges, the canvas used about as fully as the original, and copy kept off the photo subject. Empty letterbox bars scale the whole part down.</dd>
+        <dt>Photo subject</dt><dd>How much of each photo's subject (face, person, product) is still visible. A dropped photo counts as 0.</dd>
       </dl>
     </details>
   </section>
@@ -53,6 +53,7 @@
   <section class="ev-card">
     <h2>Every design, every size</h2>
     <p class="xr-hint">Chameleon's score, and how far ahead of the best naive resize it is. Select a cell to open that design in the Resize view.</p>
+    <p class="ev-swipe" aria-hidden="true">Swipe sideways to see every size →</p>
     <div class="ev-scroll"><table class="ev-grid" id="ev-grid"></table></div>
   </section>
 
