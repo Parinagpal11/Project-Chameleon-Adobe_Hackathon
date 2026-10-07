@@ -174,8 +174,9 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     present_share = len(nb) / len(groups) if groups else 1.0
     from .understand import reading_order
     # reading order of the copy (photos may move beside or above it; that is a re-flow, not a reshuffle)
+    # (the logo is left out too: on a banner it leads the row by convention)
     copy_nb = {gid: b for gid, b in nb.items()
-               if not any(roles.get(m) in ('hero', 'image') for m in next(gr['members'] for gr in groups if gr['id'] == gid))}
+               if not any(roles.get(m) in ('hero', 'image', 'logo') for m in next(gr['members'] for gr in groups if gr['id'] == gid))}
     orig_order = [g for g in a['reading_order'] if g in copy_nb]
     order = _pairs_kept(orig_order, reading_order([{'id': gid, 'box': b} for gid, b in copy_nb.items()]))
     by_size_orig = sorted((n for n in orig_texts if n['id'] in out and shown(n['id'], False) > 0),
@@ -229,7 +230,31 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     under = _subject_under_copy(out, a)
     excess = max(0.0, under - a.get('_orig_under', 0.0) - .03)
     clear = max(0.0, 1 - 3 * excess)
-    composition = (no_overlap + inside + margins + fill + clear) / 5 * frame   # empty letterbox bars count against
+    # presence: the headline, the button and the main photo keep about the weight they had on the original canvas
+    W0, H0 = float(original['page']['width']), float(original['page']['height'])
+    on = {n['id']: n for n in original['nodes']}
+    pres = []
+    for role in ('headline', 'cta'):
+        ids_ = [n['id'] for n in orig_texts if roles.get(n['id']) == role and shown(n['id'], False) > 0]
+        if ids_:
+            i = max(ids_, key=lambda x: float((on[x].get('style') or {}).get('fontSize') or 0))
+            r0 = float((on[i].get('style') or {}).get('fontSize') or 0) / min(W0, H0)
+            r1 = dsize(out[i]) / min(W, H)
+            if r0 > 0:
+                pres.append(min(1.0, (r1 / r0) / .6))
+    photos0 = [n for n in original['nodes'] if n['type'] == 'image' and roles.get(n['id']) in ('hero', 'image')]
+    if photos0:
+        p0 = max(photos0, key=lambda n: n['box'][2] * n['box'][3])
+        n1 = out.get(p0['id'])
+        if present(n1):
+            a0_ = (p0['box'][2] * p0['box'][3]) / (W0 * H0)
+            a1_ = (n1['box'][2] * n1['box'][3]) / (W * H)
+            if a0_ > 0:
+                pres.append(min(1.0, (a1_ / a0_) ** .5 / .6))
+    presence = sum(pres) / len(pres) if pres else 1.0
+    composition = (no_overlap + inside + margins + fill + clear + presence) / 6 * frame   # empty letterbox bars count against
+    if presence < .8:
+        notes.append('Headline, button or photo much smaller than in the original.')
     if clash:
         notes.append(f'{clash} overlap{"s" if clash > 1 else ""}.')
     if fill < .7:

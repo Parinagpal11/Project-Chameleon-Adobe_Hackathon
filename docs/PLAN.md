@@ -33,8 +33,8 @@ Team: **Pari Nagpal**, **Priyanshu**, **Anwar** (Iowa State University).
 
 ## Week 3 — Oct 20–26: prove it
 - [ ] Evaluation runner: 36 designs × 8 sizes vs stretch/letterbox/crop → HTML report (B) — runner and `/report` done on the 12 seed designs; 24 real designs still to add
-- [ ] Fix the worst 20 cases from the report (A)
-- [ ] Plain-language reasons per result; alternatives per size (A, C)
+- [x] Fix the worst cases from the report (A) — lowest score went from 66 to 78 on the seed set; repeat when the real designs are in
+- [x] Plain-language reasons per result; alternatives per size (A, C) — layouts tried, scored, shown in the Resize tab
 - [ ] Reconnect "fix once, apply everywhere" rules to the new engine (A)
 - [ ] Blind preference study with 5–8 students (B)
 - [ ] Hosted demo (Render or Fly) + Docker image (C)

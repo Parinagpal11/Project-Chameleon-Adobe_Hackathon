@@ -285,6 +285,26 @@
     if (v === 'resize') runAdapt(); else fit();
   }
   function fitScale(w, h, box = 260, boxH = 220) { return Math.min(box / w, boxH / h); }
+  // the other layouts Chameleon tried for this size, scored; select one to see it (with its checks and reasons)
+  function altStrip(r, onPick) {
+    if (!r.alternatives || !r.alternatives.length) return null;
+    const options = [{ label: r.layout_label || 'Chosen layout', design: r.design, score: r.score, checks: r.checks, reasons: r.reasons, chosen: true },
+      ...r.alternatives.map(x => ({ label: x.label, design: x.design, score: x.score, checks: x.checks, reasons: x.reasons }))];
+    const btns = options.map((o, i) => {
+      const cv = el('canvas', { 'aria-hidden': 'true' });
+      GR.draw(cv, o.design, { scale: fitScale(r.width, r.height, 96, 64) });
+      const b = el('button', { class: 'rz-alt' + (i === 0 ? ' on' : ''), type: 'button', 'aria-pressed': String(i === 0),
+        title: o.chosen ? 'The layout Chameleon chose' : 'Another layout Chameleon tried' },
+        cv, el('span', {}, el('b', { text: o.label }), el('small', { text: `${o.chosen ? 'Chosen · ' : ''}score ${Math.round(o.score.overall)}` })));
+      b.onclick = () => {
+        onPick(o);
+        btns.forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+      };
+      return b;
+    });
+    return el('div', { class: 'rz-alts', role: 'group', 'aria-label': 'Layouts Chameleon tried' },
+      el('span', { class: 'rz-alts-h', text: 'Layouts tried' }), ...btns);
+  }
   async function runAdapt() {
     if (!S.design) return;
     const ticket = (S.rzTicket = (S.rzTicket || 0) + 1);
@@ -298,7 +318,8 @@
     $('rz-title').textContent = `Resize · ${d0.name || 'design'}`;
     let ok = 0, keptAll = 0, nKept = 0, cropCut = 0, stretched = 0, sumC = 0, sumB = 0, nS = 0;
     const rows = res.results.map(r => {
-      for (const n of r.design.nodes) if (n.srcFrom && src[n.srcFrom]) n.src = src[n.srcFrom];
+      for (const d of [r.design, ...(r.alternatives || []).map(x => x.design)])
+        for (const n of d.nodes) if (n.srcFrom && src[n.srcFrom]) n.src = src[n.srcFrom];
       const c = r.checks, b = r.baselines;
       if (c.ok) ok++;
       if (c.subject_kept != null) { keptAll += c.subject_kept; nKept++; }
@@ -314,12 +335,16 @@
       const tag = (text, kind) => el('span', { class: 'rz-tag' + (kind ? ' ' + kind : ''), text });
       const col = (title, canvas, tags, win) => el('div', { class: 'rz-col' + (win ? ' win' : '') },
         el('h3', { text: title }), el('div', { class: 'rz-cell' }, canvas), el('div', { class: 'rz-tags' }, ...tags.filter(Boolean)));
-      const chamTags = [
-        tag(c.overlaps.length ? `${c.overlaps.length} overlap${c.overlaps.length > 1 ? 's' : ''}` : 'No overlaps', c.overlaps.length ? 'bad' : 'good'),
-        tag(c.off_canvas.length ? `${c.off_canvas.length} off canvas` : 'All inside', c.off_canvas.length ? 'bad' : 'good'),
-        tag(c.small_text.length ? `${c.small_text.length} text under 12px` : 'Text ≥ 12px', c.small_text.length ? 'bad' : 'good'),
-      ];
-      if (c.subject_kept != null) chamTags.push(tag(`Subject ${Math.round(c.subject_kept * 100)}% kept`, c.subject_kept >= .95 ? 'good' : ''));
+      const checkTags = (c) => {
+        const t = [
+          tag(c.overlaps.length ? `${c.overlaps.length} overlap${c.overlaps.length > 1 ? 's' : ''}` : 'No overlaps', c.overlaps.length ? 'bad' : 'good'),
+          tag(c.off_canvas.length ? `${c.off_canvas.length} off canvas` : 'All inside', c.off_canvas.length ? 'bad' : 'good'),
+          tag(c.small_text.length ? `${c.small_text.length} text under 12px` : 'Text ≥ 12px', c.small_text.length ? 'bad' : 'good'),
+        ];
+        if (c.subject_kept != null) t.push(tag(`Subject ${Math.round(c.subject_kept * 100)}% kept`, c.subject_kept >= .95 ? 'good' : ''));
+        return t;
+      };
+      const chamTags = checkTags(c);
       const scoreTag = (sc) => {
         if (!sc) return null;
         const t = tag(`Score ${Math.round(sc.overall)}`, 'score');
@@ -336,12 +361,21 @@
       const stretchTags = [scoreTag(b.stretch.score), tag(b.stretch.distortion > 1.02 ? `Distorted ${b.stretch.distortion.toFixed(2)}×` : 'No distortion', b.stretch.distortion > 1.15 ? 'bad' : '')];
       const cropTags = [scoreTag(b.crop.score), tag(b.crop.cut.length ? `${b.crop.cut.length} element${b.crop.cut.length > 1 ? 's' : ''} cut off` : 'Nothing cut off', b.crop.cut.length ? 'bad' : '')];
       if (b.crop.subject_kept != null) cropTags.push(tag(`Subject ${Math.round(b.crop.subject_kept * 100)}% kept`, b.crop.subject_kept < .95 ? 'bad' : ''));
+      const why = el('ul', { class: 'rz-why' }, ...r.reasons.map(x => el('li', { text: x })));
+      const chamCol = col('Chameleon', cham, chamTags, true);
+      // picking another layout swaps the frame, its score, its checks and its reasons together
+      const strip = altStrip(r, o => {
+        GR.draw(cham, o.design, { scale: sc });
+        chamCol.querySelector('.rz-tags').replaceChildren(...[scoreTag(o.score), ...checkTags(o.checks)].filter(Boolean));
+        why.replaceChildren(...o.reasons.map(x => el('li', { text: x })));
+      });
+      if (strip) chamCol.append(strip);
       return el('article', { class: 'rz-row', 'aria-label': `${r.name || ''} ${r.width} by ${r.height}` },
         el('div', { class: 'rz-row-head' }, el('b', { text: r.name || `${r.width}×${r.height}` }),
           el('span', { class: 'dim', text: `${r.width}×${r.height}` }),
           el('span', { class: `xr-badge t${r.tier}`, text: `Tier ${r.tier} · ${r.tier_name}` })),
-        el('div', { class: 'rz-cols' }, col('Stretch', stretch, stretchTags), col('Centre crop', crop, cropTags), col('Chameleon', cham, chamTags, true)),
-        el('ul', { class: 'rz-why' }, ...r.reasons.map(x => el('li', { text: x }))));
+        el('div', { class: 'rz-cols' }, col('Stretch', stretch, stretchTags), col('Centre crop', crop, cropTags), chamCol),
+        why);
     });
     const stat = (n, label) => el('div', { class: 'rz-stat' }, el('b', { text: n }), el('small', { text: label }));
     $('rz-score').replaceChildren(...(nS ? [stat(`${Math.round(sumC / nS)} vs ${Math.round(sumB / nS)}`, 'avg score: Chameleon vs better of stretch / crop')] : []),

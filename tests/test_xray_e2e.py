@@ -94,7 +94,7 @@ class XrayE2E(unittest.TestCase):
         page.click('#tab-resize')
         page.wait_for_selector('.rz-row')
         self.assertEqual(page.locator('.rz-row').count(), 8)
-        self.assertEqual(page.locator('.rz-row canvas').count(), 24)
+        self.assertEqual(page.locator('.rz-cell canvas').count(), 24)
         self.assertEqual(page.get_attribute('#tab-resize', 'aria-selected'), 'true')
         self.assertTrue(page.is_hidden('#xr-main'))
         self.assertIn('8/8', page.inner_text('#rz-score'))
@@ -116,6 +116,15 @@ class XrayE2E(unittest.TestCase):
         mob.goto(f'{self.base}/xray#d=product-grid'); mob.wait_for_selector('.xr-group')
         mob.click('#tab-resize'); mob.wait_for_selector('.rz-row')
         self.assertLessEqual(mob.evaluate('document.documentElement.scrollWidth'), 391)
+
+    def test_layouts_tried(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900})
+        errors = []; page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(self.base + '/xray#d=sale-banner&v=resize'); page.wait_for_selector('.rz-alts')
+        alt = page.locator('.rz-alt >> nth=1')
+        alt.click()
+        self.assertEqual(alt.get_attribute('aria-pressed'), 'true')
+        self.assertEqual(errors, [])
 
     def test_report_page(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900})

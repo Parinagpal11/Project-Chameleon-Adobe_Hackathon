@@ -162,3 +162,17 @@ body.xr { overflow: auto; min-height: 100%; }
   .rz-head { margin: 4px 0 12px; }
   .xr-resize { padding: 12px; }
 }
+
+/* layouts tried for one size */
+.rz-alts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.rz-col { grid-template-rows: auto 1fr auto auto; }
+.rz-alts-h { flex-basis: 100%; font-size: 12px; font-weight: 600; color: var(--muted); }
+.rz-alt { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.rz-alt:hover { background: var(--surface-3); }
+.rz-alt.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.rz-alt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rz-alt canvas { display: block; border-radius: 3px; box-shadow: var(--frame-shadow); }
+.rz-alt b { display: block; font-size: 12px; }
+.rz-alt small { color: var(--faint); font-size: 11.5px; }

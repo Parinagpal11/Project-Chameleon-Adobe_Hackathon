@@ -138,6 +138,7 @@ class Item:
         self.roles = roles
         self.dropped: set[str] = set()       # member ids hidden to make room
         self.keep_h = False                  # keep the designer's text box height as a minimum (layout kept)
+        self.xs = 1.0                        # extra shrink for display-size text (keeps the rest of the message)
         self.pills = []                      # several buttons in one group (store badges): (shape, label) pairs
         shapes = [n for n in self.members if n.type == 'shape']
         if self.kind in ('button', 'badge') and len(shapes) > 1:
@@ -174,7 +175,7 @@ class Item:
             sizes.append((text_width(n.text, fs, n.style) * 1.04, fs * lh, fs))
         gaps = sum(sz[2] * .8 for sz in sizes[:-1])
         natural = sum(sz[0] for sz in sizes) + gaps
-        if natural <= avail_w + .5:
+        if natural <= avail_w + .5 and not getattr(self, 'force_stack', False):
             w = min(avail_w, max(natural, self.box.w * k)) if self.spread else natural
             return w, max(sz[1] for sz in sizes), True, sizes
         sizes = []                           # too narrow: the pieces stack, each wrapping in the width
@@ -205,6 +206,17 @@ class Item:
 
     def reflowable(self) -> bool:
         return self.kind in ('text', 'text-stack') and self.role != 'logo'
+
+    def fs_of(self, n, k: float) -> float:
+        """Font size of text node n at scale k: display sizes (over 24 px) can shrink further by xs, down to 24 px."""
+        f = n.font_size * k
+        floor = getattr(self, 'display_floor', 24.0)
+        if self.xs < 1 and f > floor:
+            f = max(floor, f * self.xs)
+        return max(MIN_TEXT, f)
+
+    def display_size(self, k: float) -> float:
+        return max((self.fs_of(n, k) for n in self.texts), default=0)
 
     def is_pill(self) -> bool:
         if self.kind not in ('button', 'badge'):
@@ -241,13 +253,13 @@ class Item:
                 w = avail_w
             else:      # as wide as its box at this scale, or as its words need at the (12 px floored) size
                 n0 = texts[0]
-                need = text_width(n0.text, max(MIN_TEXT, n0.font_size * k), n0.style) if '\n' not in (n0.text or '') else \
-                    max(text_width(t, max(MIN_TEXT, n0.font_size * k), n0.style) for t in n0.text.split('\n'))
+                need = text_width(n0.text, self.fs_of(n0, k), n0.style) if '\n' not in (n0.text or '') else \
+                    max(text_width(t, self.fs_of(n0, k), n0.style) for t in n0.text.split('\n'))
                 w = min(avail_w, max(self.box.w * k, need))
             h = 0.0
             prev = None
             for n in texts:
-                fs = max(MIN_TEXT, n.font_size * k)
+                fs = self.fs_of(n, k)
                 lh = float(n.style.get('lineHeight') or 1.15)
                 h += max(lines_for(n, fs, w) * fs * lh, n.box.h * k if self.keep_h else 0)
                 if prev is not None:
@@ -255,7 +267,34 @@ class Item:
                 prev = n
             return w, h
         u = self.uk(k)
+        if self.box.w * u > avail_w + .5 and self._stackable():
+            return self._stacked(k, avail_w)[:2]
         return self.box.w * u, self.box.h * u
+
+    def _stackable(self) -> bool:
+        """Avatar + name, icon + label: a small picture beside text that can go above it on a narrow canvas."""
+        imgs = [n for n in self.members if n.type == 'image']
+        return self.kind == 'lockup' and len(imgs) == 1 and bool(self.texts) and \
+            all(n.box.x >= imgs[0].box.r - 2 for n in self.texts)
+
+    def _stacked(self, k: float, avail_w: float):
+        img = next(n for n in self.members if n.type == 'image')
+        u = self.uk(k)
+        iw = min(img.box.w * u, avail_w)
+        ih = img.box.h * iw / max(1.0, img.box.w)
+        gap = max(6.0, 10 * u)
+        rows = []
+        h = ih + gap
+        tw = iw
+        for n in sorted(self.texts, key=lambda n: n.box.y):
+            fs = max(MIN_TEXT, n.font_size * k)
+            lh = fs * float(n.style.get('lineHeight') or 1.15)
+            nl = text_lines(n.text, fs, avail_w, n.style)
+            w_ = min(avail_w, text_width(n.text, fs, n.style))
+            rows.append((n, fs, w_, nl * lh))
+            h += nl * lh
+            tw = max(tw, w_)
+        return tw, h, img, iw, ih, gap, rows
 
     def min_font(self, k: float) -> float:
         if not self.texts:
@@ -306,16 +345,29 @@ class Item:
             iw, _ = self.measure(k, w)
             cy, prev = y, None
             for n in texts:
-                fs = max(MIN_TEXT, n.font_size * k)
+                fs = self.fs_of(n, k)
                 lh = float(n.style.get('lineHeight') or 1.15)
                 if prev is not None:
                     cy += max(0.0, n.box.y - prev.box.b) * k
                 th = max(lines_for(n, fs, iw) * fs * lh, n.box.h * k if self.keep_h else 0)
                 _set(out, n.id, [ax(iw), cy, iw, th], fs=fs)
+                if getattr(self, 'force_align', None):
+                    out[n.id].setdefault('style', {})['align'] = self.force_align
                 cy += th
                 prev = n
             return iw, cy - y
         u = self.uk(k)
+        if self.box.w * u > w + .5 and self._stackable():
+            tw, th, img, iw, ih, gap, rows = self._stacked(k, w)
+            centre = self.align == 'center'
+            _set(out, img.id, [x + (w - iw) / 2 if centre else x, y, iw, ih],
+                 radius=float(img.style.get('radius') or 0) * iw / max(1.0, img.box.w) if img.style.get('radius') else None)
+            cy = y + ih + gap
+            for n, fs, w_, hh in rows:
+                _set(out, n.id, [x + (w - w_) / 2 if centre else x, cy, w_, hh], fs=fs)
+                out[n.id].setdefault('style', {})['align'] = 'center' if centre else 'left'   # stacked lines line up
+                cy += hh
+            return tw, th
         return self.place_uniform(out, ax(self.box.w * u), y, u)
 
     def place_uniform(self, out: dict, gx: float, y: float, u: float):
@@ -396,6 +448,8 @@ class RepeatItem:
         n = len(self.cards)
         hgap = max(self.gap0 * k, 24 * k, MIN_TEXT)
         vgap = self.gap0 * k
+        for c in self.cards:
+            c.force_stack = False
         for cols in range(min(n, max_cols), 0, -1):
             colw = (avail_w - hgap * (cols - 1)) / cols
             if cols == 1 or all(c.reflowable() or c._textrow(k, colw)[2] for c in self.cards):
@@ -403,6 +457,9 @@ class RepeatItem:
         rows = math.ceil(n / cols)
         cols = math.ceil(n / rows)
         colw = (avail_w - hgap * (cols - 1)) / cols
+        if any(not c.reflowable() and not c._textrow(k, colw)[2] for c in self.cards):
+            for c in self.cards:                # one row has to stack: all rows stack, so the list stays consistent
+                c.force_stack = True
         heights = [max(c.measure(k, colw)[1] for c in self.cards[r * cols:(r + 1) * cols]) for r in range(rows)]
         self._u = k
         self._flex = (colw, hgap, vgap, heights)
@@ -564,6 +621,9 @@ def _stretchy(it) -> bool:
 
 
 def _row_widths(items, region, k, gap):
+    for it in items:
+        if isinstance(it, RepeatItem) and not it.flex:
+            it.max_h = region.h             # in a row, cards size to the row's height, not to the type scale
     fixed = [it for it in items if not _stretchy(it)]
     flex = [it for it in items if _stretchy(it)]
     fixed_w = sum(it.measure(k, region.w)[0] for it in fixed)
@@ -586,7 +646,7 @@ def flow_row(items, region: Box, k: float, gap: float, out: dict):
 
 def fits_row(items, region, k, gap):
     widths, free, flex = _row_widths(items, region, k, gap)
-    min_flex = max((max(MIN_TEXT, n.font_size * k) * 5 for it in flex for n in it.texts), default=0)
+    min_flex = max((it.fs_of(n, k) * 5 if hasattr(it, "fs_of") else MIN_TEXT * 5 for it in flex for n in it.texts), default=0)
     if (flex and free / len(flex) < min_flex) or (not flex and free < -.5):
         return False
     return all(it.measure(k, w)[1] <= region.h + .5 for it, w in zip(items, widths)) and _readable(items, k) \
@@ -603,7 +663,7 @@ def _words_fit(items, k, widths):
     for it, w in zip(items, widths):
         if it.reflowable():
             for n in it.texts:
-                if longest_word(n.text, max(MIN_TEXT, n.font_size * k), n.style) > w + .5:
+                if longest_word(n.text, it.fs_of(n, k), n.style) > w + .5:
                     return False
     return True
 
@@ -936,11 +996,62 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
             res.pop('exact', None)
             return {**meta, **res}
     res = reflow_one(design, g, a, W, H, tier)
+    res = _pick_layout(res, design, g, a, W, H, tier)
     res['reasons'] = list(dict.fromkeys([head] + res['reasons']))
+    for alt in res.get('alternatives', []):
+        alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
     return {**meta, **res}
 
 
-def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
+LAYOUT_LABEL = {('photo', 'beside'): 'Photo beside the copy', ('photo', 'above'): 'Photo above the copy',
+                ('cards', 'beside'): 'Cards beside the copy', ('cards', 'below'): 'Cards under the copy'}
+
+
+def _quick_score(res: dict, original: dict, a: dict) -> float:
+    from .score import score
+    kept = res['checks'].get('subject_kept')
+    if a['subjects'] and kept is None:
+        kept = 0.0
+    return score(res['design'], original, a, 1.0, kept, a.get('_base_overlaps', set()))
+
+
+def _pick_layout(res: dict, design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
+    """Candidate layouts: the rules' choice and the other family (photo beside vs above, cards beside vs under).
+    Each is scored; the best is shown and the others are kept as alternatives."""
+    lay = res.get('layout') or {}
+    aspect = W / H
+    tries = []
+    if lay.get('photo') and .6 <= aspect <= 2.6:
+        tries.append(('photo', 'above' if lay['photo'] == 'beside' else 'beside', {'orient': 'above' if lay['photo'] == 'beside' else 'beside'}))
+    if lay.get('cards') and .6 <= aspect <= 2.6:
+        tries.append(('cards', 'below' if lay['cards'] == 'beside' else 'beside', {'cards_beside': lay['cards'] == 'below'}))
+    if not tries:
+        return res
+    key = 'photo' if lay.get('photo') else 'cards'
+    cands = [(LAYOUT_LABEL[(key, lay[key])], res)]
+    for kind, val, kw in tries:
+        alt = reflow_one(design, g, a, W, H, tier, **kw)
+        if (alt.get('layout') or {}).get(kind) == val:       # the forced family really happened
+            cands.append((LAYOUT_LABEL[(kind, val)], alt))
+    full = [(lab, r, _quick_score(r, design, a)) for lab, r in cands]
+    scored = [(lab, r, sc['overall']) for lab, r, sc in full]
+    full_by_id = {id(r): sc for _, r, sc in full}
+    best = scored[0]
+    for c in scored[1:]:
+        if c[1]['checks']['ok'] and c[2] > best[2] + 1.0:
+            best = c
+    chosen = best[1]
+    if best is not scored[0]:
+        chosen['reasons'] = chosen['reasons'] + [f"{best[0]} scores higher here ({best[2]:.0f} vs {scored[0][2]:.0f}), so it was chosen."]
+    chosen['alternatives'] = [{'label': lab, 'design': r['design'], 'reasons': r['reasons'], 'checks': r['checks'],
+                               'score_overall': round(sc, 1), 'score': full_by_id[id(r)]}
+                              for lab, r, sc in scored if r is not chosen and r['checks']['ok']]
+    chosen['layout_label'] = best[0]
+    return chosen
+
+
+def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=None, cards_beside=None) -> dict:
+    """`orient` ('beside'/'above') and `cards_beside` force a layout family; None lets the rules choose."""
     s = min(W / g.width, H / g.height)
     reasons: list[str] = []
     out = _fresh(design)
@@ -972,6 +1083,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
 
     content = Box(m, m, W - 2 * m, H - 2 * m)
     aspect = W / H
+    photo_mode = None
     photo_region = None
     copy_region = content
 
@@ -979,7 +1091,10 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
         hb = Box.of(hero['box'])
         bleed = sum([hb.x <= 1, hb.y <= 1, hb.r >= g.width - 1, hb.b >= g.height - 1]) >= 2
         horizontal = aspect >= 1.25 or (aspect > .8 and a['style']['structure'] == 'split-horizontal')
-        if tier == 3 and aspect > 3:
+        if orient is not None:
+            horizontal = orient == 'beside'
+        photo_mode = 'beside' if horizontal or (tier == 3 and aspect > 3 and orient is None) else 'above'
+        if tier == 3 and aspect > 3 and orient is None:
             side = min(H - (0 if bleed else 2 * m), W * .25)
             if side < 40:
                 reasons.append('Photo dropped: the canvas is too short to show it.')
@@ -1009,19 +1124,25 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
             # size the photo column to its subject: narrower for a tall subject, wider for a wide one
             # (two people, a bowl and a lemon), keeping at least 40% of the width for the copy
             sub = a['subjects'].get(hero['members'][0])
+            copy_min = max(W * .38, min(W * .6, 150.0))         # the copy needs real width, even on small canvases
+            max_nw = max(W * .2, W - 3 * m - copy_min)
             if sub and sub.get('source') != 'assumed':
                 img_aspect = sub.get('aspect') or hb.w / max(1.0, hb.h)
                 w0 = photo_region.w
                 best = None
-                for i in range(15):
-                    nw = W * (.25 + .025 * i)          # 25% ... 60% of the canvas
-                    if W - nw - 3 * m < W * .38:
+                w0 = min(w0, max_nw)
+                for i in range(17):
+                    nw = W * (.2 + .025 * i)           # 20% ... 60% of the canvas
+                    if nw > max_nw + .5:
                         break
                     kept = smart_crop(sub['box'], img_aspect, nw / max(1.0, photo_region.h), sub.get('parts'))['kept']
                     key = (round(kept / .03), -abs(nw - w0))
                     if best is None or key > best[0]:
                         best = (key, nw)
                 nw = best[1] if best else w0
+            else:
+                nw = min(photo_region.w, max_nw)
+            if True:
                 if left:
                     photo_region = Box(photo_region.x, photo_region.y, nw, photo_region.h)
                     copy_region = Box(photo_region.r + m, copy_region.y, W - photo_region.r - 2 * m, copy_region.h)
@@ -1220,6 +1341,10 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
             else:
                 copy_region = Box(copy_region.x, copy_region.y, copy_region.w, lbox.y - gap_base - copy_region.y)
     legal_items = [Item(gr, g, roles) for gr in legal]
+    dominant = a['grid'].get('alignment') if a['grid'].get('alignment') in ('left', 'center', 'right') else 'left'
+    for it in legal_items:
+        it.align = dominant              # a small print line follows the column, not its old corner
+        it.force_align = dominant
 
     # --- copy flow with fitting: start from type sized by area (not by the short side), then shrink and drop
     if tier == 1:
@@ -1238,7 +1363,8 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
     protected = ('headline', 'cta')
     # wide canvas without a hero photo: cards go beside the copy, like a photo would
     split = None
-    if not row and hero is None and a['style']['structure'] != 'overlay' and aspect >= 1.15:
+    beside_ok = aspect >= 1.15 and (copy_region.w - m) / 2 >= 150      # each column at least 150 px wide
+    if not row and hero is None and a['style']['structure'] != 'overlay' and (beside_ok if cards_beside is None else cards_beside):
         split = next((it for it in items if isinstance(it, RepeatItem) and not it.flex), None)
 
     def columns():
@@ -1267,10 +1393,24 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                  for it in allitems if it.reflowable() and len(it.texts) > 1
                  for n in it.texts if roles.get(n.id) not in protected]
         lines.sort(key=lambda r: r[0])
+        # before giving up something that carries the message (offer, subhead, badge...), let oversized display
+        # text shrink: a 48h or a 50% OFF can be smaller and still be the biggest thing on the canvas
+        nexts = ([lines[0][0]] if lines else []) + ([cand[0].importance()] if cand else [])
+        nxt = min(nexts) if nexts else 99
+        if nxt >= DROP_ORDER.index('body'):
+            for it in allitems:
+                it.display_floor = 24.0 if min(W, H) >= 200 else 16.0     # tiny banners: display text can go to 16 px
+            disp = [it for it in allitems if it.reflowable() and it.display_size(k) > it.display_floor + 2]
+            if disp:
+                big = max(disp, key=lambda it: it.display_size(k))
+                big.xs *= .9
+                continue
         if lines and (not cand or lines[0][0] <= cand[0].importance()):
             _, it, n = lines[0]
             it.dropped.add(n.id)
             dropped.append(roles.get(n.id, 'text'))
+            if not it.texts:
+                allitems.remove(it)          # nothing left of it: it must not keep its place in the flow
             continue
         if cand:
             victim = cand[0]
@@ -1348,7 +1488,13 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
     if tier < 3:
         hero_map = (Box.of(hero['box']), photo_region) if hero and photo_region else None
         _decorate(out, g, a, W, H, W / g.width, H / g.height, s, copy_region, hero_map)
-    return finish(design, g, a, out, W, H, reasons)
+    res = finish(design, g, a, out, W, H, reasons)
+    has_cards = any(isinstance(it, RepeatItem) and not it.flex for it in items)
+    res['layout'] = {
+        'photo': photo_mode if (hero and photo_region) else None,
+        'cards': None if not has_cards or hero else ('beside' if split is not None and split in allitems else 'below'),
+    }
+    return res
 
 
 # ---------------------------------------------------------------- checks and baselines

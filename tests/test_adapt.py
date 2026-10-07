@@ -264,6 +264,35 @@ class ScoreTests(unittest.TestCase):
         self.assertGreater(rep['summary']['chameleon']['overall'], rep['summary']['letterbox']['overall'] + 10)
 
 
+class LayoutChoiceTests(unittest.TestCase):
+    def test_alternatives_are_scored_and_the_best_is_shown(self):
+        out = adapt(design('sale-banner'), EVAL_SIZES)
+        seen = 0
+        for res in out['results']:
+            for alt in res.get('alternatives', []):
+                seen += 1
+                self.assertTrue(alt['checks']['ok'])
+                self.assertIn(alt['label'], ('Photo beside the copy', 'Photo above the copy', 'Cards beside the copy', 'Cards under the copy'))
+                self.assertLessEqual(alt['score_overall'], res['score']['overall'] + 1.01)
+                self.assertNotEqual(alt['label'], res['layout_label'])
+        self.assertGreater(seen, 0)
+
+    def test_small_sale_banner_keeps_the_offer(self):
+        res = adapt(design('sale-banner'), [{'width': 300, 'height': 250}])['results'][0]
+        self.assertIn('offer', visible(res))          # "50% OFF" is the message: it must survive
+
+    def test_avatar_lockup_stacks_on_a_skyscraper(self):
+        res = adapt(design('quote-card'), [{'width': 160, 'height': 600}])['results'][0]
+        vis = visible(res)
+        for nid in ('avatar', 'name'):
+            self.assertIn(nid, vis)
+        self.assertGreater(vis['name']['box'][1], vis['avatar']['box'][1] + vis['avatar']['box'][3] - 1)   # name under the photo
+
+    def test_cards_shrink_to_a_banner_row(self):
+        res = adapt(design('webinar-speakers'), [{'width': 728, 'height': 90}])['results'][0]
+        self.assertIn('sp1', visible(res))
+
+
 class AdaptRobustness(unittest.TestCase):
     def test_legacy_studio_json(self):
         d = json.loads((ROOT / 'examples' / 'coffee_ad.json').read_text())
