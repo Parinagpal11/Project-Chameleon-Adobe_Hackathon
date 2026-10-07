@@ -294,7 +294,7 @@
     const src = Object.fromEntries(S.design.nodes.filter(n => n.src).map(n => [n.id, n.src]));
     const d0 = S.design, W0 = d0.page.width, H0 = d0.page.height;
     $('rz-title').textContent = `Resize · ${d0.name || 'design'}`;
-    let ok = 0, keptAll = 0, nKept = 0, cropCut = 0, stretched = 0;
+    let ok = 0, keptAll = 0, nKept = 0, cropCut = 0, stretched = 0, sumC = 0, sumB = 0, nS = 0;
     const rows = res.results.map(r => {
       for (const n of r.design.nodes) if (n.srcFrom && src[n.srcFrom]) n.src = src[n.srcFrom];
       const c = r.checks, b = r.baselines;
@@ -311,15 +311,23 @@
       const cham = mk(cv => { cv.setAttribute('aria-label', `Chameleon layout at ${r.width} by ${r.height}`); GR.draw(cv, r.design, { scale: sc }); });
       const tag = (text, kind) => el('span', { class: 'rz-tag' + (kind ? ' ' + kind : ''), text });
       const col = (title, canvas, tags, win) => el('div', { class: 'rz-col' + (win ? ' win' : '') },
-        el('h3', { text: title }), el('div', { class: 'rz-cell' }, canvas), el('div', { class: 'rz-tags' }, ...tags));
+        el('h3', { text: title }), el('div', { class: 'rz-cell' }, canvas), el('div', { class: 'rz-tags' }, ...tags.filter(Boolean)));
       const chamTags = [
         tag(c.overlaps.length ? `${c.overlaps.length} overlap${c.overlaps.length > 1 ? 's' : ''}` : 'No overlaps', c.overlaps.length ? 'bad' : 'good'),
         tag(c.off_canvas.length ? `${c.off_canvas.length} off canvas` : 'All inside', c.off_canvas.length ? 'bad' : 'good'),
         tag(c.small_text.length ? `${c.small_text.length} text under 12px` : 'Text ≥ 12px', c.small_text.length ? 'bad' : 'good'),
       ];
       if (c.subject_kept != null) chamTags.push(tag(`Subject ${Math.round(c.subject_kept * 100)}% kept`, c.subject_kept >= .95 ? 'good' : ''));
-      const stretchTags = [tag(b.stretch.distortion > 1.02 ? `Distorted ${b.stretch.distortion.toFixed(2)}×` : 'No distortion', b.stretch.distortion > 1.15 ? 'bad' : '')];
-      const cropTags = [tag(b.crop.cut.length ? `${b.crop.cut.length} element${b.crop.cut.length > 1 ? 's' : ''} cut off` : 'Nothing cut off', b.crop.cut.length ? 'bad' : '')];
+      const scoreTag = (sc) => {
+        if (!sc) return null;
+        const t = tag(`Score ${Math.round(sc.overall)}`, 'score');
+        t.title = `Content ${Math.round(sc.content)} · Legibility ${Math.round(sc.legibility)} · Faithfulness ${Math.round(sc.faithfulness)} · Composition ${Math.round(sc.composition)}` +
+          (sc.subject != null ? ` · Subject ${Math.round(sc.subject)}` : '') + (sc.notes.length ? '\n' + sc.notes.join(' ') : '');
+        return t;
+      };
+      if (r.score) { chamTags.unshift(scoreTag(r.score)); sumC += r.score.overall; sumB += Math.max(b.stretch.score.overall, b.crop.score.overall, b.letterbox.score.overall); nS++; }
+      const stretchTags = [scoreTag(b.stretch.score), tag(b.stretch.distortion > 1.02 ? `Distorted ${b.stretch.distortion.toFixed(2)}×` : 'No distortion', b.stretch.distortion > 1.15 ? 'bad' : '')];
+      const cropTags = [scoreTag(b.crop.score), tag(b.crop.cut.length ? `${b.crop.cut.length} element${b.crop.cut.length > 1 ? 's' : ''} cut off` : 'Nothing cut off', b.crop.cut.length ? 'bad' : '')];
       if (b.crop.subject_kept != null) cropTags.push(tag(`Subject ${Math.round(b.crop.subject_kept * 100)}% kept`, b.crop.subject_kept < .95 ? 'bad' : ''));
       return el('article', { class: 'rz-row', 'aria-label': `${r.name || ''} ${r.width} by ${r.height}` },
         el('div', { class: 'rz-row-head' }, el('b', { text: r.name || `${r.width}×${r.height}` }),
@@ -329,7 +337,8 @@
         el('ul', { class: 'rz-why' }, ...r.reasons.map(x => el('li', { text: x }))));
     });
     const stat = (n, label) => el('div', { class: 'rz-stat' }, el('b', { text: n }), el('small', { text: label }));
-    $('rz-score').replaceChildren(stat(`${ok}/${res.results.length}`, 'sizes pass every check'),
+    $('rz-score').replaceChildren(...(nS ? [stat(`${Math.round(sumC / nS)} vs ${Math.round(sumB / nS)}`, 'score: Chameleon vs best naive')] : []),
+      stat(`${ok}/${res.results.length}`, 'sizes pass every check'),
       stat(`${stretched}`, 'sizes distorted by stretching'), stat(`${cropCut}`, 'sizes where cropping cuts content'),
       ...(nKept ? [stat(`${Math.round(keptAll / nKept * 100)}%`, 'photo subject kept (avg)')] : []));
     $('rz-list').replaceChildren(...rows);
@@ -408,6 +417,7 @@
 
   function boot() {
     $('xr-file-icon').replaceChildren(Icon('upload')); $('xr-home-icon').replaceChildren(Icon('home'));
+    $('xr-report-icon').replaceChildren(Icon('chart'));
     $('xr-photo-icon').replaceChildren(Icon('image'));
     $('tab-understand').onclick = () => setView('understand');
     $('tab-resize').onclick = () => setView('resize');
@@ -466,6 +476,7 @@
       const m = location.hash.match(/d=([\w-]+)/);
       const first = (m && ts.designs.find(d => d.id === m[1])) ? m[1] : ts.designs[0]?.id;
       if (first) { $('xr-design').value = first; pick(first); }
+      if (/v=resize/.test(location.hash)) setView('resize');
     }).catch(e => showError(e.message));
   }
   boot();

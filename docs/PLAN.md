@@ -25,14 +25,14 @@ Team: **Pari Nagpal**, **Priyanshu**, **Anwar** (Iowa State University).
 - [x] Solve stage: deterministic block layout with fitting (no kiwisolver needed so far; several candidates still open) (A) — `engine/adapt.py`
 - [x] Tier strategies: keep layout + re-wrap (1), re-flow groups (2), rebuild by importance (3) (A)
 - [ ] Subject-aware crop + background extend (B) — crop done; extend open
-- [ ] Score: faithfulness, legibility, balance, overlap, off-canvas (B) — overlap, off-canvas, 12 px text, subject kept done
+- [x] Score: content, legibility, faithfulness, composition, subject — same scoring for Chameleon and the baselines (B) — `engine/score.py`
 - [x] `POST /adapt` and `POST /analyze` (A)
 - [ ] Judge mode: bring design → pick sizes → Stretch | Crop | Chameleon (C) — first version in the X-ray Resize tab
 - [ ] Test set at 24 designs (C)
 - [x] **Milestone Oct 19:** every test design adapts to all 8 sizes end to end (96/96 pass the checks)
 
 ## Week 3 — Oct 20–26: prove it
-- [ ] Evaluation runner: 36 designs × 8 sizes vs stretch/letterbox/crop → HTML report (B)
+- [ ] Evaluation runner: 36 designs × 8 sizes vs stretch/letterbox/crop → HTML report (B) — runner and `/report` done on the 12 seed designs; 24 real designs still to add
 - [ ] Fix the worst 20 cases from the report (A)
 - [ ] Plain-language reasons per result; alternatives per size (A, C)
 - [ ] Reconnect "fix once, apply everywhere" rules to the new engine (A)

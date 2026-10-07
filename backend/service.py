@@ -307,6 +307,54 @@ def testset_design(design_id):
     return json.loads(f.read_text())
 
 
+_EVAL_CACHE = {}
+METHODS = ('chameleon', 'stretch', 'crop', 'letterbox')
+DIMS = ('overall', 'content', 'legibility', 'faithfulness', 'composition', 'subject')
+
+
+def eval_report():
+    """Every test-set design at the 8 evaluation sizes, scored for Chameleon and the three naive resizes.
+
+    Cached until a test-set file or the engine changes."""
+    from engine.adapt import adapt
+    from engine.plan import EVAL_SIZES
+    engine = ROOT / 'backend' / 'engine'
+    stamp = tuple(sorted((f.name, f.stat().st_mtime) for f in list(TESTSET.glob('*.json')) + list(engine.glob('*.py'))))
+    if _EVAL_CACHE.get('stamp') == stamp:
+        return _EVAL_CACHE['report']
+    designs, rows = [], []
+    for meta in testset_index():
+        d = testset_design(meta['id'])
+        res = adapt(d, EVAL_SIZES)
+        out = []
+        for r in res['results']:
+            entry = {'name': r['name'], 'width': r['width'], 'height': r['height'], 'tier': r['tier'],
+                     'chameleon': r['score'], 'checks_ok': r['checks']['ok']}
+            for m in METHODS[1:]:
+                entry[m] = r['baselines'][m]['score']
+            out.append(entry)
+            rows.append(entry)
+        designs.append({'id': meta['id'], 'name': meta.get('name', meta['id']), 'level': meta.get('level'),
+                        'width': d['page']['width'], 'height': d['page']['height'], 'results': out})
+
+    def avg(m, dim):
+        vals = [r[m][dim] for r in rows if r[m].get(dim) is not None]
+        return round(sum(vals) / len(vals), 1) if vals else None
+    summary = {m: {dim: avg(m, dim) for dim in DIMS} for m in METHODS}
+    wins = ties = losses = 0
+    for r in rows:
+        best = max(r[m]['overall'] for m in METHODS[1:])
+        c = r['chameleon']['overall']
+        wins += c > best + .05
+        ties += abs(c - best) <= .05
+        losses += c < best - .05
+    report = {'cases': len(rows), 'sizes': EVAL_SIZES, 'summary': summary,
+              'wins': wins, 'ties': ties, 'losses': losses,
+              'checks_ok': sum(r['checks_ok'] for r in rows), 'designs': designs}
+    _EVAL_CACHE.update(stamp=stamp, report=report)
+    return report
+
+
 def _clean_targets(targets):
     from engine.plan import EVAL_SIZES
     if targets is None:

@@ -85,7 +85,7 @@ Rules are keyed by semantic **role** (headline, offer, CTA, logo, image, legal�
 - `backend/local_server.py`: the default HTTP server. `backend/main.py` is an optional FastAPI adapter that hasn't been integration-tested.
 - `frontend/`: `index.html`, `app.css` (light/dark tokens), `tour.css`, `silk.js` (animated ribbon behind the home screen), `icons.js` (SVG icons), `core.js` (state, sync, rules, history, projects, export), `canvas.js` (pan/zoom/select/drag), `panels.js` (layers, assets, inspector, rules), `dnd.js` (drag & drop), `tour.js` (animated tour and guides), `home.js`, `render.js`, `zip.js`.
 
-Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `POST /adapt` (design + sizes → adapted designs, reasons, checks, stretch/crop baselines) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
+Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `POST /adapt` (design + sizes → adapted designs, reasons, checks, scores, stretch/crop/letterbox baselines) · `GET /eval` (scores for the whole test set; the page is `/report`) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
 
 Studio API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn` · `/parse-rule` · `GET|POST|DELETE /rules` · `PATCH|DELETE /rules/{id}` · `GET /projects` · `GET|PUT|DELETE /project?campaign=` · `GET /templates` · `GET /example?name=` · `GET /benchmark`
 

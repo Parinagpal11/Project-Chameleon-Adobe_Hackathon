@@ -149,6 +149,8 @@ body.xr { overflow: auto; min-height: 100%; }
 .rz-tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .rz-tag.good { background: var(--ok-soft); color: var(--ok); }
 .rz-tag.bad { background: var(--bad-soft); color: var(--bad); }
+.rz-tag.score { background: transparent; border: 1px solid var(--line-2); color: var(--text); font-weight: 600; cursor: help; }
+.rz-col.win .rz-tag.score { border-color: var(--accent); color: var(--accent); }
 .rz-why { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; color: var(--muted); font-size: 12.5px; }
 .rz-why li::before { content: '→ '; color: var(--accent); }
 @media (max-width: 920px) { .rz-cols { grid-template-columns: 1fr; } .rz-col.win { order: -1; } .xr-tabs button { padding: 0 10px; } }

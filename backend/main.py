@@ -64,6 +64,10 @@ def testset():
     return {'designs': service.testset_index(), 'sizes': EVAL_SIZES}
 @app.get('/testset/{design_id}')
 def testset_design(design_id: str): return run(service.testset_design, design_id)
+@app.get('/eval')
+def eval_report(): return run(service.eval_report)
+@app.get('/report')
+def report(): return FileResponse(service.ROOT / 'frontend' / 'eval.html')
 @app.get('/xray')
 def xray(): return FileResponse(service.ROOT / 'frontend' / 'xray.html')
 @app.get('/benchmark')

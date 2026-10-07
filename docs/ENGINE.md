@@ -1,6 +1,6 @@
 # Engine v2 — design graph and the Understand stage
 
-The new engine works in five stages: **Understand → Plan → Solve → Score → Explain**. This file covers what exists now: the input format, the Understand stage, Plan tiers, the Solve stage (`/adapt`), the test set and the X-ray view. Score comes next. See [STRATEGY.md](STRATEGY.md) §4 for the reasoning.
+The new engine works in five stages: **Understand → Plan → Solve → Score → Explain**. This file covers what exists now: the input format, the Understand stage, Plan tiers, the Solve stage (`/adapt`), the Score stage and evaluation report (`/eval`, `/report`), the test set and the X-ray view. See [STRATEGY.md](STRATEGY.md) §4 for the reasoning.
 
 ## 1. Input format: `chameleon-graph/1`
 
@@ -78,6 +78,20 @@ Building blocks: text stacks re-wrap; buttons re-size around their label; a grou
 **Text measurement.** Text is wrapped with the real advance widths of the web fonts the studio loads (`engine/fonts.json`, built by `tools/make_font_metrics.py` from the Google Fonts files), with 3% slack. For fonts other than Inter the wider of the font and Inter is used, so text still fits if the web font fails to load and the page falls back to Inter. A light logo made to sit on the photo (white on a light page) stays on the photo or is dropped with a reason. A photo that would leave the copy no room is dropped. If nothing else fits, only the headline is kept, and the reasons say the size is too small.
 
 `checks`: `overlaps` (except ones the designer made on purpose), `off_canvas`, `small_text` (text the renderer would draw under 12 px, measured the way it draws), `low_contrast` (text or logo that became hard to read where it now sits), `dropped`, `subject_kept`, `ok`. `baselines`: what plain stretching (distortion), centre crop (elements cut, subject kept) and letterboxing (empty share) would do at the same size.
+
+## 3c. Score: how good is a result?
+
+`engine/score.py` rates every adapted design against the original, 0–100, and rates the three naive resizes the same way, built as real designs (stretch both axes, centre crop to cover, letterbox to fit). Each `/adapt` result carries `score` and `baselines.{stretch,crop,letterbox}.score`.
+
+| Part | Weight | What it measures |
+|---|---|---|
+| Content | 25% | How much of the message is still there, not cut off and readable. Headline, button, logo, offer and photo count most; legal and decoration least. |
+| Legibility | 25% | Share of the text that draws at 12 px or more (measured the way the renderer draws), undistorted, with enough contrast. |
+| Faithfulness | 20% | Reading order of the copy and type hierarchy kept (sizes within 15% count as equal), multiplied by shape fidelity: stretched 1.3× keeps 80%, 2.5× keeps nothing. |
+| Composition | 20% | No overlaps, nothing off canvas, room at the edges, and the canvas used about as fully as the original (empty letterbox bars count against). |
+| Photo subject | 10% | Share of each photo's subject still visible (left out when there is no photo). |
+
+**Evaluation report.** `GET /eval` scores every test design at the 8 sizes (cached until a design or the engine changes); `/report` shows it: the averages, each part, every design × size with Chameleon's lead over the best naive resize, and the ten lowest cases to fix next. On the 12 seed designs: Chameleon 97.6, letterbox 81.4, centre crop 73.1, stretch 58.9; Chameleon scores highest in 81 of 96 cases, ties in 15 (the original size, or a shape so close that a plain resize already works) and never scores lower.
 
 ## 4. Test set
 

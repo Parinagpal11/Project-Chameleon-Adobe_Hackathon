@@ -232,6 +232,38 @@ class UserPhotoAdapt(unittest.TestCase):
             self.assertGreaterEqual(res['checks']['subject_kept'], .9, res['width'])
 
 
+class ScoreTests(unittest.TestCase):
+    def test_scores_are_bounded_and_explained(self):
+        out = adapt(design('event-poster'), EVAL_SIZES)
+        for res in out['results']:
+            for sc in [res['score']] + [res['baselines'][m]['score'] for m in ('stretch', 'crop', 'letterbox')]:
+                for k in ('overall', 'content', 'legibility', 'faithfulness', 'composition'):
+                    self.assertTrue(0 <= sc[k] <= 100, (k, sc))
+                self.assertIsInstance(sc['notes'], list)
+
+    def test_original_size_scores_full_marks(self):
+        for i in IDS:
+            d = design(i)
+            res = adapt(d, [{'width': d['page']['width'], 'height': d['page']['height']}])['results'][0]
+            self.assertGreaterEqual(res['score']['overall'], 99, (i, res['score']))
+
+    def test_baselines_are_penalised_for_what_they_do(self):
+        res = adapt(design('promo-centered'), [{'width': 728, 'height': 90}])['results'][0]
+        b = res['baselines']
+        self.assertLess(b['stretch']['score']['faithfulness'], 50)       # letters stretched 8x
+        self.assertLess(b['crop']['score']['content'], 60)               # most of the design cut away
+        self.assertLess(b['letterbox']['score']['legibility'], 50)       # everything shrunk under 12 px
+        self.assertGreater(res['score']['overall'], max(b[m]['score']['overall'] for m in b))
+
+    def test_chameleon_never_loses_on_the_test_set(self):
+        import service
+        rep = service.eval_report()
+        self.assertEqual(rep['cases'], len(IDS) * 8)
+        self.assertEqual(rep['losses'], 0)
+        self.assertEqual(rep['checks_ok'], rep['cases'])
+        self.assertGreater(rep['summary']['chameleon']['overall'], rep['summary']['letterbox']['overall'] + 10)
+
+
 class AdaptRobustness(unittest.TestCase):
     def test_legacy_studio_json(self):
         d = json.loads((ROOT / 'examples' / 'coffee_ad.json').read_text())
@@ -281,6 +313,12 @@ class AdaptHTTP(unittest.TestCase):
         try:
             out = api('/adapt', {'design': design('sale-banner')})
             self.assertEqual(len(out['results']), 8)
+            self.assertIn('score', out['results'][0])
+            with opener.open(base + '/eval', timeout=30) as r:
+                rep = json.load(r)
+            self.assertEqual(rep['losses'], 0)
+            with opener.open(base + '/report', timeout=10) as r:
+                self.assertIn(b'Chameleon against naive resizing', r.read())
             out = api('/adapt', {'design': design('sale-banner'), 'targets': [{'width': 728, 'height': 90}]})
             self.assertEqual(out['results'][0]['tier'], 3)
             for bad in ({'design': design('sale-banner'), 'targets': [{'width': 5, 'height': 5}]},

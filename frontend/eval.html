@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chameleon Report</title>
+<script>
+  (function () { var t = null; try { t = localStorage.getItem('chameleon.theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t; })();
+</script>
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/xray.css">
+<link rel="stylesheet" href="/assets/eval.css">
+</head>
+<body class="xr ev">
+<header class="xr-top">
+  <div class="xr-brand"><span class="xr-mark" aria-hidden="true"></span><strong>Chameleon</strong><span class="xr-sub">Report</span></div>
+  <span class="xr-spacer"></span>
+  <a class="xr-btn ghost" id="ev-json" href="/eval" download="chameleon-report.json"><span id="ev-json-icon"></span><span>JSON</span></a>
+  <a class="xr-btn ghost" href="/xray"><span id="ev-xray-icon"></span><span>X-ray</span></a>
+  <a class="xr-btn ghost" href="/"><span id="ev-home-icon"></span><span>Studio</span></a>
+  <button class="xr-btn ghost icon" id="ev-theme" aria-label="Toggle light or dark theme"></button>
+</header>
+
+<main class="ev-main">
+  <section class="ev-intro">
+    <h1>Chameleon against naive resizing</h1>
+    <p class="xr-hint" id="ev-sub">Every test design at every evaluation size, scored the same way for Chameleon and for plain stretch, centre crop and letterbox.</p>
+  </section>
+
+  <div class="xr-error" id="ev-error" role="alert" hidden></div>
+  <section class="ev-tiles" id="ev-tiles" aria-label="Average scores" aria-live="polite">
+    <p class="xr-hint">Scoring every design at every size…</p>
+  </section>
+
+  <section class="ev-card">
+    <h2>Where the points come from</h2>
+    <p class="xr-hint">Average of each part, 0–100. Overall weights: content 25%, legibility 25%, faithfulness 20%, composition 20%, photo subject 10%.</p>
+    <div class="ev-scroll"><table class="ev-dims" id="ev-dims"></table></div>
+    <details class="ev-how">
+      <summary>How each part is measured</summary>
+      <dl>
+        <dt>Content</dt><dd>How much of the message is still there, not cut off and readable. Headline, button, logo, offer and photo count most; legal and decoration least.</dd>
+        <dt>Legibility</dt><dd>Share of the text that draws at 12 px or more, undistorted, on a background it can be read on.</dd>
+        <dt>Faithfulness</dt><dd>The original's reading order and type hierarchy are kept, and nothing is stretched out of shape.</dd>
+        <dt>Composition</dt><dd>No overlaps, nothing off the canvas, room at the edges, and the canvas used about as fully as the original (empty letterbox bars count against).</dd>
+        <dt>Photo subject</dt><dd>How much of each photo's subject (face, person, product) is still visible.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <section class="ev-card">
+    <h2>Every design, every size</h2>
+    <p class="xr-hint">Chameleon's score, and how far ahead of the best naive resize it is. Select a cell to open that design in the Resize view.</p>
+    <div class="ev-scroll"><table class="ev-grid" id="ev-grid"></table></div>
+  </section>
+
+  <section class="ev-card">
+    <h2>Lowest scores</h2>
+    <p class="xr-hint">The ten cases with the lowest Chameleon score: what to fix next.</p>
+    <ol class="ev-worst" id="ev-worst"></ol>
+  </section>
+</main>
+<script src="/assets/icons.js"></script>
+<script src="/assets/eval.js"></script>
+</body>
+</html>

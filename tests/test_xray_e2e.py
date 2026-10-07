@@ -117,6 +117,22 @@ class XrayE2E(unittest.TestCase):
         mob.click('#tab-resize'); mob.wait_for_selector('.rz-row')
         self.assertLessEqual(mob.evaluate('document.documentElement.scrollWidth'), 391)
 
+    def test_report_page(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900})
+        errors = []; page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(self.base + '/report'); page.wait_for_selector('.ev-cell')
+        self.assertEqual(page.locator('.ev-tile').count(), 4)
+        self.assertEqual(page.locator('.ev-cell').count(), page.evaluate('EV.cases'))
+        self.assertEqual(page.locator('.ev-worst li').count(), 10)
+        page.click('.ev-cell >> nth=5')
+        page.wait_for_selector('.rz-row')                         # a cell opens that design in the Resize view
+        self.assertEqual(page.get_attribute('#tab-resize', 'aria-selected'), 'true')
+        self.assertTrue(page.locator('.rz-tag.score').count() >= 8)
+        mob = self.browser.new_page(viewport={'width': 390, 'height': 844})
+        mob.goto(self.base + '/report'); mob.wait_for_selector('.ev-cell')
+        self.assertLessEqual(mob.evaluate('document.documentElement.scrollWidth'), 391)
+        self.assertEqual(errors, [])
+
     def test_mobile_has_no_sideways_scroll(self):
         page = self.open('webinar-speakers', 390, 844)
         self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), 391)

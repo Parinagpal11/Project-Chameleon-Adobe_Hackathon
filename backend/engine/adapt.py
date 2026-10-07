@@ -804,6 +804,23 @@ def _copy_items(groups: list[dict], a: dict, g, roles: dict) -> list:
 
 
 def adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = frozenset()) -> dict:
+    res = _adapt_one(design, g, a, target, base_overlaps)
+    attach_scores(res, design, a)
+    return res
+
+
+def attach_scores(res: dict, original: dict, a: dict):
+    """Score Chameleon and the three naive resizes the same way (engine/score.py)."""
+    from .score import score, baseline_designs
+    W, H = res['width'], res['height']
+    allowed = a.get('_base_overlaps', set())
+    res['score'] = score(res['design'], original, a, 1.0, res['checks'].get('subject_kept'), allowed)
+    for name, (d, distortion, frame) in baseline_designs(original, W, H).items():
+        kept = res['baselines']['crop']['subject_kept'] if name == 'crop' else (1.0 if a['subjects'] else None)
+        res['baselines'].setdefault(name, {})['score'] = score(d, original, a, distortion, kept, allowed, frame)
+
+
+def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = frozenset()) -> dict:
     W, H = float(target['width']), float(target['height'])
     plan = plan_tier(g.width, g.height, W, H)
     tier = plan['tier']
@@ -1370,6 +1387,8 @@ def adapt(design: dict, targets: list[dict]) -> dict:
     base_overlaps = {tuple(sorted(p)) for p in base['overlaps']}
     a['_base_overlaps'] = base_overlaps
     a['_base_contrast'] = _contrasts(src, a)
+    from .score import used_share
+    a['_orig_used'] = used_share(src, a)
     return {'source': {'width': g.width, 'height': g.height},
             'analysis_notes': a['notes'],
             'results': [adapt_one(src, g, a, t, base_overlaps) for t in targets]}

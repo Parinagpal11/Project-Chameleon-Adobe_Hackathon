@@ -61,8 +61,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, run_benchmark())
                 if p == '/testset': return self.send(200, {'designs': service.testset_index(), 'sizes': EVAL_SIZES})
                 if p.startswith('/testset/'): return self.send(200, service.testset_design(p[9:]))
+                if p == '/eval': return self.send(200, service.eval_report())
                 if p == '/': file = service.ROOT / 'frontend' / 'index.html'
                 elif p == '/xray': file = service.ROOT / 'frontend' / 'xray.html'
+                elif p in ('/report', '/eval/report'): file = service.ROOT / 'frontend' / 'eval.html'
                 elif p == '/example':
                     name = q.get('name', ['coffee_ad'])[0]
                     if name not in service.TEMPLATES: return self.send(404, {'detail': 'Unknown template'})
