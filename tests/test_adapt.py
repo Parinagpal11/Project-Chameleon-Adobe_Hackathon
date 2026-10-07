@@ -181,6 +181,57 @@ class AdaptTestSet(unittest.TestCase):
         self.assertEqual(json.dumps(a1, sort_keys=True), json.dumps(a2, sort_keys=True))
 
 
+PHOTOS = ROOT / 'tests' / 'fixtures' / 'photos'
+
+
+def with_photo(design_id, photo):
+    """What 'Use your photo' does: the whole photo goes into the design's main photo, subject unknown."""
+    import base64
+    d = design(design_id)
+    uri = 'data:image/jpeg;base64,' + base64.b64encode((PHOTOS / photo).read_bytes()).decode()
+    imgs = [n for n in d['nodes'] if n['type'] == 'image' and 'logo' not in n['id']]
+    target = max(imgs, key=lambda n: n['box'][2] * n['box'][3])
+    target['src'] = uri
+    target.pop('subject', None)
+    return d, target['id']
+
+
+class UserPhotoAdapt(unittest.TestCase):
+    """The ad photos Pari generated for manual testing, kept as regression cases."""
+
+    def test_every_photo_in_its_design_passes(self):
+        for did, ph in [('overlay-fullbleed', 'user-hiker-lake.jpg'), ('overlay-fullbleed', 'user-two-friends-cafe.jpg'),
+                        ('split-photo-left', 'user-barista-pour.jpg'), ('story-stacked', 'user-pasta-lemon.jpg'),
+                        ('sale-banner', 'user-coral-sandal.jpg'), ('story-stacked', 'user-two-friends-cafe.jpg')]:
+            d, _ = with_photo(did, ph)
+            for res in adapt(d, EVAL_SIZES)['results']:
+                self.assertTrue(res['checks']['ok'], (did, ph, res['width'], res['height'], res['checks']))
+
+    def test_copy_never_sits_on_the_friends(self):
+        from engine.graph import Box
+        from engine.understand import analyze
+        from engine.graph import load
+        d, pid = with_photo('overlay-fullbleed', 'user-two-friends-cafe.jpg')
+        parts = analyze(load(d))['subjects'][pid]
+        parts = parts.get('parts') or [parts['box']]
+        for res in adapt(d, [{'width': 1200, 'height': 628}, {'width': 1600, 'height': 900}, {'width': 1584, 'height': 396}])['results']:
+            vis = visible(res)
+            ph = vis[pid]
+            x, y, w, h = ph['box']
+            cx, cy, cw, ch = ph.get('crop') or [0, 0, 1, 1]
+            for pb in parts:
+                q = Box(x + (pb[0] - cx) / cw * w, y + (pb[1] - cy) / ch * h, pb[2] / cw * w, pb[3] / ch * h)
+                for n in vis.values():
+                    if n['type'] == 'text':
+                        self.assertLess(Box.of(n['box']).inter(q), q.area * .15, (res['width'], n['id']))
+
+    def test_wide_subject_gets_a_wide_photo_column(self):
+        """Bowl + lemon is a wide subject: the photo column widens instead of cutting it."""
+        d, _ = with_photo('story-stacked', 'user-pasta-lemon.jpg')
+        for res in adapt(d, [{'width': 1200, 'height': 628}, {'width': 1600, 'height': 900}])['results']:
+            self.assertGreaterEqual(res['checks']['subject_kept'], .9, res['width'])
+
+
 class AdaptRobustness(unittest.TestCase):
     def test_legacy_studio_json(self):
         d = json.loads((ROOT / 'examples' / 'coffee_ad.json').read_text())

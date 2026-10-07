@@ -893,21 +893,28 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                 photo_region = Box(W - pw, 0, pw, H)
             copy_region = Box(photo_region.r + m, m, W - photo_region.r - 2 * m, H - 2 * m) if left else \
                 Box(m, m, photo_region.x - 2 * m, H - 2 * m)
-            # narrow the photo column until its subject fits whole (the copy column takes the room)
+            # size the photo column to its subject: narrower for a tall subject, wider for a wide one
+            # (two people, a bowl and a lemon), keeping at least 40% of the width for the copy
             sub = a['subjects'].get(hero['members'][0])
             if sub and sub.get('source') != 'assumed':
                 img_aspect = sub.get('aspect') or hb.w / max(1.0, hb.h)
-                for _ in range(12):
-                    kept = smart_crop(sub['box'], img_aspect, photo_region.w / max(1.0, photo_region.h), sub.get('parts'))['kept']
-                    if kept >= .98 or photo_region.w * .92 < W * .25:
+                w0 = photo_region.w
+                best = None
+                for i in range(15):
+                    nw = W * (.25 + .025 * i)          # 25% ... 60% of the canvas
+                    if W - nw - 3 * m < W * .38:
                         break
-                    nw = photo_region.w * .92
-                    if left:
-                        photo_region = Box(photo_region.x, photo_region.y, nw, photo_region.h)
-                        copy_region = Box(photo_region.r + m, copy_region.y, W - photo_region.r - 2 * m, copy_region.h)
-                    else:
-                        photo_region = Box(photo_region.r - nw, photo_region.y, nw, photo_region.h)
-                        copy_region = Box(copy_region.x, copy_region.y, photo_region.x - m - copy_region.x, copy_region.h)
+                    kept = smart_crop(sub['box'], img_aspect, nw / max(1.0, photo_region.h), sub.get('parts'))['kept']
+                    key = (round(kept / .03), -abs(nw - w0))
+                    if best is None or key > best[0]:
+                        best = (key, nw)
+                nw = best[1] if best else w0
+                if left:
+                    photo_region = Box(photo_region.x, photo_region.y, nw, photo_region.h)
+                    copy_region = Box(photo_region.r + m, copy_region.y, W - photo_region.r - 2 * m, copy_region.h)
+                else:
+                    photo_region = Box(photo_region.r - nw, photo_region.y, nw, photo_region.h)
+                    copy_region = Box(copy_region.x, copy_region.y, photo_region.x - m - copy_region.x, copy_region.h)
             if a['style']['structure'] != 'split-horizontal':
                 reasons.append('Photo and copy re-flowed side by side for the wider canvas.')
         else:
@@ -946,6 +953,8 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                 _set_photo(out, g.by_id[nid], photo_region.list())
 
     # --- overlay: copy goes where the photo's subject is not
+    overlay_parts: list = []        # where the people/objects of a full-bleed photo land on the canvas
+    overlay_panel = None
     if a['style']['structure'] == 'overlay':
         sub = next(iter(a['subjects'].values()), None)
         bg_img = next((out[i] for i in a['layers']['background'] if out[i]['type'] == 'image'), None)
@@ -955,34 +964,60 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
             bx, by, bw, bh = sub['box']
             cx_ = ((bx + bw / 2) - c['crop'][0]) / c['crop'][2]
             cy_ = ((by + bh / 2) - c['crop'][1]) / c['crop'][3]
-            if aspect >= 1.25 and c['kept'] < .8:
-                # too wide to keep the subject behind the copy: the photo becomes a side panel shaped like its subject
-                ob = g.by_id[bg_img['id']].box
-                sa = (bw * ob.w) / max(1.0, bh * ob.h)
-                pw = min(W * .5, max(W * .22, H * min(1.6, max(.6, sa * 1.3))))
-                right = cx_ >= .5
-                photo_box = Box(W - pw, 0, pw, H) if right else Box(0, 0, pw, H)
-                _set(out, bg_img['id'], photo_box.list())
-                copy_region = Box(m, m, W - pw - 2 * m, H - 2 * m) if right else Box(pw + m, m, W - pw - 2 * m, H - 2 * m)
-                reasons.append('Photo moved to a side panel on the ' + ('right' if right else 'left') +
-                               ' so its subject stays whole; copy sits beside it.')
-            elif aspect < .8 and c['kept'] < .8:
-                ob = g.by_id[bg_img['id']].box
-                sa = (bw * ob.w) / max(1.0, bh * ob.h)
-                ph = min(H * .5, max(H * .22, W / min(1.6, max(.6, sa / 1.3))))
-                top = cy_ < .55
-                photo_box = Box(0, 0, W, ph) if top else Box(0, H - ph, W, ph)
-                _set(out, bg_img['id'], photo_box.list())
-                copy_region = Box(m, ph + m, W - 2 * m, H - ph - 2 * m) if top else Box(m, m, W - 2 * m, H - ph - 2 * m)
-                reasons.append('Photo moved to a panel at the ' + ('top' if top else 'bottom') +
-                               ' so its subject stays whole; copy sits ' + ('below.' if top else 'above.'))
-            elif aspect >= 1.25:
-                copy_region = Box(m, m, W * .5 - 1.5 * m, H - 2 * m) if cx_ >= .5 else Box(W * .5 + m * .5, m, W * .5 - 1.5 * m, H - 2 * m)
-                reasons.append('Copy placed on the ' + ('left' if cx_ >= .5 else 'right') + ' half, away from the photo subject.')
+            ob = g.by_id[bg_img['id']].box
+            parts = sub.get('parts') or [sub['box']]
+
+            def on_canvas(pb, crop, frame):
+                """A subject part (image-relative) as a box on the canvas, through the crop shown in `frame`."""
+                return Box(frame.x + (pb[0] - crop[0]) / crop[2] * frame.w, frame.y + (pb[1] - crop[1]) / crop[3] * frame.h,
+                           pb[2] / crop[2] * frame.w, pb[3] / crop[3] * frame.h)
+
+            def covers(region):
+                """Would copy in `region` sit on a person or object of the full-bleed photo?"""
+                return any(region.inter(q) > q.area * .15 for q in (on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in parts))
+
+            if aspect >= 1.25:
+                region = Box(m, m, W * .5 - 1.5 * m, H - 2 * m) if cx_ >= .5 else Box(W * .5 + m * .5, m, W * .5 - 1.5 * m, H - 2 * m)
             else:
                 band = .48 if tier < 3 else .7
-                copy_region = Box(m, H * (1 - band), W - 2 * m, H * band - m) if cy_ < .55 else Box(m, m, W - 2 * m, H * band - m)
-                reasons.append('Copy placed ' + ('below' if cy_ < .55 else 'above') + ' the photo subject.')
+                region = Box(m, H * (1 - band), W - 2 * m, H * band - m) if cy_ < .55 else Box(m, m, W - 2 * m, H * band - m)
+            if (c['kept'] < .8 or covers(region)) and (aspect >= 1.25 or aspect < .8):
+                # the subject can't stay whole behind the copy: the photo becomes a panel sized to keep it,
+                # and the copy sits beside it on the page background
+                wide = aspect >= 1.25
+                full = W if wide else H
+                best = None
+                for i in range(15):
+                    size = full * (.22 + .027 * i)            # 22% ... 60% of the long side
+                    if full - size < full * .38:
+                        break
+                    slot = (size / H) if wide else (W / size)
+                    kept = smart_crop(sub['box'], img_aspect, slot, sub.get('parts'))['kept']
+                    key = (round(kept / .03), -size)        # keep the most subject, then leave the copy the most room
+                    if best is None or key > best[0]:
+                        best = (key, size)
+                size = best[1]
+                if wide:
+                    right = cx_ >= .5
+                    photo_box = Box(W - size, 0, size, H) if right else Box(0, 0, size, H)
+                    copy_region = Box(m, m, W - size - 2 * m, H - 2 * m) if right else Box(size + m, m, W - size - 2 * m, H - 2 * m)
+                    reasons.append('Photo moved to a side panel on the ' + ('right' if right else 'left') +
+                                   ' so its subject stays whole and clear of the copy; copy sits beside it.')
+                else:
+                    top = cy_ < .55
+                    photo_box = Box(0, 0, W, size) if top else Box(0, H - size, W, size)
+                    copy_region = Box(m, size + m, W - 2 * m, H - size - 2 * m) if top else Box(m, m, W - 2 * m, H - size - 2 * m)
+                    reasons.append('Photo moved to a panel at the ' + ('top' if top else 'bottom') +
+                                   ' so its subject stays whole and clear of the copy; copy sits ' + ('below.' if top else 'above.'))
+                _set(out, bg_img['id'], photo_box.list())
+                overlay_panel = photo_box
+            else:
+                copy_region = region
+                if aspect >= 1.25:
+                    reasons.append('Copy placed on the ' + ('left' if cx_ >= .5 else 'right') + ' half, away from the photo subject.')
+                else:
+                    reasons.append('Copy placed ' + ('below' if cy_ < .55 else 'above') + ' the photo subject.')
+                overlay_parts = [on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in parts]
 
     # a photo that leaves no usable room for the copy goes (copy is the message)
     if photo_region is not None and hero and (copy_region.w < max(40.0, W * .2) or copy_region.h < max(14.0, H * .12)):
@@ -1055,6 +1090,13 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int) -> dict:
                 x = copy_region.x if x < W / 2 else copy_region.r - lw
             y = copy_region.b - lh if 'bottom' in anchors else copy_region.y
         x = min(max(x, 0.0), max(0.0, W - lw))
+        if overlay_parts and any(Box(x, y, lw, lh).inter(q) > 0 for q in overlay_parts):
+            # never on a face: try the other side of the top edge
+            for nx in (W - m - lw, m, (W - lw) / 2):
+                if not any(Box(nx, y, lw, lh).inter(q) > 0 for q in overlay_parts):
+                    x = nx
+                    reasons.append('Logo moved to the other corner so it stays off the photo subject.')
+                    break
         it.place(out, x, y, lw, k_logo)
         lbox = Box(x, y, lw, lh)
         # shrink the copy region so copy never runs into the logo
