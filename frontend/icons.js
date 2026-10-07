@@ -36,6 +36,7 @@
     play: '<path d="M7 5l12 7-12 7z"/>',
     pause: '<path d="M8 5v14M16 5v14"/>',
     upload: '<path d="M12 16V5m-5 5l5-5 5 5M5 20h14"/>',
+    back: '<path d="M15 18l-6-6 6-6"/>',
     chart: '<path d="M4 4v16h16"/><path d="M9 16v-4"/><path d="M13.5 16V8"/><path d="M18 16v-6"/>',
     file: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>',
     command: '<path d="M9 6a3 3 0 10-3 3h12a3 3 0 10-3-3v12a3 3 0 103-3H6a3 3 0 103 3z"/>',

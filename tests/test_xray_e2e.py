@@ -124,6 +124,12 @@ class XrayE2E(unittest.TestCase):
         self.assertEqual(page.locator('.ev-tile').count(), 4)
         self.assertEqual(page.locator('.ev-cell').count(), page.evaluate('EV.cases'))
         self.assertEqual(page.locator('.ev-worst li').count(), 10)
+        page.click('#ev-back')                                    # opened directly: Back goes to the X-ray
+        page.wait_for_selector('.xr-group')
+        page.click('a[href="/report"]'); page.wait_for_selector('.ev-cell')
+        page.click('#ev-back')                                    # came from the X-ray: Back returns there
+        page.wait_for_url('**/xray**'); page.wait_for_selector('.xr-group')
+        page.goto(self.base + '/report'); page.wait_for_selector('.ev-cell')
         page.click('.ev-cell >> nth=5')
         page.wait_for_selector('.rz-row')                         # a cell opens that design in the Resize view
         self.assertEqual(page.get_attribute('#tab-resize', 'aria-selected'), 'true')

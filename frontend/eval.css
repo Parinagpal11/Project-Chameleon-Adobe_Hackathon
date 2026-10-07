@@ -72,3 +72,6 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 380px) { .ev .xr-sub { display: none; } }
 .ev-swipe { display: none; color: var(--faint); font-size: 12px; margin: 0 0 6px; }
 .ev-cell small { font-size: 12px; }
+
+.ev-back { margin-left: -6px; padding-left: 6px; }
+.ev-back + .xr-brand { margin-left: 2px; }

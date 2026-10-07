@@ -69,6 +69,13 @@
   themeBtn.onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = t; try { localStorage.setItem('chameleon.theme', t); } catch (e) {} paint(); };
   paint();
+  // Back: to the page you came from (X-ray, Studio); opened directly, it goes to the X-ray
+  $('ev-back-icon').replaceChildren(Icon('back'));
+  $('ev-back').onclick = e => {
+    let same = false;
+    try { same = document.referrer && new URL(document.referrer).origin === location.origin; } catch (err) {}
+    if (same && history.length > 1) { e.preventDefault(); history.back(); }
+  };
   $('ev-json-icon').replaceChildren(Icon('download')); $('ev-xray-icon').replaceChildren(Icon('layers')); $('ev-home-icon').replaceChildren(Icon('home'));
   fetch('/eval').then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(new Error(j.detail || r.statusText))))
     .then(rep => { window.EV = rep; render(rep); })
