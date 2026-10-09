@@ -872,6 +872,15 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         slot = nb[2] / max(1.0, nb[3])
         ob = g.by_id[nid].box
         img_aspect = sub.get('aspect') or (ob.w / max(1.0, ob.h))
+        given = g.by_id[nid].crop
+        same_slot = (abs(W - g.width) < .5 and abs(H - g.height) < .5
+                     and all(abs(u - v) < .5 for u, v in zip(nb, ob.list())))
+        if given and same_slot:
+            # original size, photo where the designer put it: keep their framing
+            n['crop'] = list(given)
+            crops[nid] = 1.0
+            reasons.append('Photo kept as the designer framed it.')
+            continue
         c = smart_crop(sub['box'], img_aspect, slot, sub.get('parts'))
         if nid in a['layers']['background'] and sub.get('source') != 'assumed':
             # copy sits on this photo: reframe so the subject is clear of it
@@ -890,7 +899,9 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
                 reasons.append('Photo reframed so its subject sits clear of the copy.')
             c = r
         n['crop'] = c['crop']
-        crops[nid] = c['kept']
+        # scored like the naive resizes: the share of what the ORIGINAL showed of the subject
+        # (a designer may have framed only part of it)
+        crops[nid] = min(1.0, c['kept'] / max(sub.get('kept') or 1.0, 1e-6))
         if sub.get('source') != 'assumed' and c['kept'] >= .999:
             reasons.append(f"Photo cropped around its subject ({sub['source']}): 100% kept.")
         elif sub.get('source') != 'assumed':
