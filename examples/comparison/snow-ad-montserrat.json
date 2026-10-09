@@ -27,7 +27,8 @@
         0.45
       ],
       "meta": {
-        "label": "mountain lake"
+        "label": "mountain lake",
+        "fixedCrop": true
       }
     },
     {

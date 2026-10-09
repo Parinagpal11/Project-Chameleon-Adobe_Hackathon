@@ -439,11 +439,14 @@
     try {
       const img = await fileToDataURL(file);
       target.src = img.src;
-      // placed the way an editor drops a photo into a frame: centred, filling the slot. Chameleon keeps
-      // this framing at the original size and re-crops around the subject for every other size.
-      const slot = target.box[2] / Math.max(1, target.box[3]);
-      target.crop = img.aspect > slot ? [(1 - slot / img.aspect) / 2, 0, slot / img.aspect, 1]
-                                      : [0, (1 - img.aspect / slot) / 2, 1, img.aspect / slot];
+      // a new photo: Chameleon frames it around its subject at every size, the original size included.
+      // A design can pin its framing instead (meta.fixedCrop, e.g. the comparison ad that must start from the
+      // same frame as the other editors): then the photo is placed centred, filling the slot, at the original size.
+      if (target.meta && target.meta.fixedCrop) {
+        const slot = target.box[2] / Math.max(1, target.box[3]);
+        target.crop = img.aspect > slot ? [(1 - slot / img.aspect) / 2, 0, slot / img.aspect, 1]
+                                        : [0, (1 - img.aspect / slot) / 2, 1, img.aspect / slot];
+      } else delete target.crop;
       delete target.subject;                 // make the engine find it
       target.meta = { ...(target.meta || {}), label: 'your photo' };
       S.mine = target.id;

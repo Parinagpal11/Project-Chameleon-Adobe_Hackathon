@@ -148,10 +148,9 @@ class AdaptTestSet(unittest.TestCase):
         """story-stacked's logo is white, made for the photo: it must never land on the cream copy area."""
         for res in self.out['story-stacked']['results']:
             self.assertEqual(res['checks']['low_contrast'], [], res['width'])
-            if 'logo' in visible(res):
-                self.assertFalse(any(r.startswith('Logo joins the row') for r in res['reasons']))
-            else:
-                self.assertTrue(any(r.startswith('Logo dropped') for r in res['reasons']), res['width'])
+            self.assertIn('logo', visible(res), res['width'])            # must-keep
+            if any(r.startswith('Logo joins the row') for r in res['reasons']):  # off the photo: only in dark ink
+                self.assertTrue(any('dark ink' in r for r in res['reasons']), res['width'])
 
     def test_drops_are_explained(self):
         from engine.understand import analyze

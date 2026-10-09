@@ -51,6 +51,32 @@ def _visual_order(boxes: dict) -> list:
     return [gid for row in rows for gid, _ in sorted(row, key=lambda kv: kv[1].x)]
 
 
+def largest_empty(boxes: list, W: float, H: float, n: int = 48) -> float:
+    """Share of the canvas taken by the biggest empty rectangle (no photo, text or shape in it), on an n x n grid."""
+    occ = [[False] * n for _ in range(n)]
+    for b in boxes:
+        x0, y0 = max(0, int(b.x / W * n)), max(0, int(b.y / H * n))
+        x1, y1 = min(n, int(-(-b.r / W * n // 1))), min(n, int(-(-b.b / H * n // 1)))
+        for yy in range(y0, y1):
+            row = occ[yy]
+            for xx in range(x0, x1):
+                row[xx] = True
+    best, heights = 0, [0] * n
+    for yy in range(n):
+        for xx in range(n):
+            heights[xx] = 0 if occ[yy][xx] else heights[xx] + 1
+        stack = []                                    # largest rectangle in a histogram
+        for xx in range(n + 1):
+            h = heights[xx] if xx < n else 0
+            start = xx
+            while stack and stack[-1][1] >= h:
+                st, sh = stack.pop()
+                best = max(best, sh * (xx - st))
+                start = st
+            stack.append((start, h))
+    return best / (n * n)
+
+
 def used_share(design: dict, a: dict) -> float:
     """Share of the canvas covered by the content's bounding box (or a background element)."""
     roles = {k: v['role'] for k, v in a['roles'].items()}
@@ -129,10 +155,18 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
             return 1.0 if size >= MIN_TEXT - .01 else (.5 if size >= 9 else 0.0)
         return inside
 
-    # content: the message, including the full-bleed photo
+    # content: the message, including the full-bleed photo.
+    # Small banners (300x250, 728x90, 160x600) are expected to carry headline, button and logo; dropping a
+    # secondary line there (eyebrow, caption, legal, body, extra items) costs half.
+    banner = min(W, H) <= 250
+    SECONDARY = ('eyebrow', 'caption', 'legal', 'body', 'item', 'price', 'decoration', 'repeat')
+
+    def got(n):
+        v = shown(n['id'])
+        return max(v, .5) if banner and roles.get(n['id']) in SECONDARY and shown(n['id'], False) < .5 else v
     items = leaves + bg_photos
     tot = sum(_w(roles.get(n['id'])) if n not in bg_photos else 2.0 for n in items)
-    kept = sum((_w(roles.get(n['id'])) if n not in bg_photos else 2.0) * shown(n['id']) for n in items)
+    kept = sum((_w(roles.get(n['id'])) if n not in bg_photos else 2.0) * got(n) for n in items)
     content = kept / tot if tot else 1.0
     lost = [('photo' if roles.get(n['id']) in ('hero', 'image', 'background') else roles.get(n['id']) or n['id'])
             for n in items if shown(n['id'], False) < .5]
@@ -144,6 +178,9 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     texts = [out[n['id']] for n in orig_texts if shown(n['id'], False) > 0]
     readable = 0.0
     small = faint = hidden_under = 0
+    if banner:          # a secondary line dropped on a banner is not an unreadable line
+        readable += sum(.5 * _w(roles.get(n['id'])) for n in orig_texts
+                        if roles.get(n['id']) in SECONDARY and shown(n['id'], False) <= 0)
     for n in texts:
         wgt = _w(roles.get(n['id']))
         size_ok = dsize(n) >= MIN_TEXT - .01
@@ -229,7 +266,8 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     # copy should not cover the photo subject more than the designer's own layout did
     under = _subject_under_copy(out, a)
     excess = max(0.0, under - a.get('_orig_under', 0.0) - .03)
-    clear = max(0.0, 1 - 3 * excess)
+    faces = any(sub.get('source') in ('faces', 'people') for sub in a['subjects'].values())
+    clear = max(0.0, 1 - (6 if faces else 3) * excess)       # copy on a face is worse than on an object
     # presence: the headline, the button and the main photo keep about the weight they had on the original canvas
     W0, H0 = float(original['page']['width']), float(original['page']['height'])
     on = {n['id']: n for n in original['nodes']}
@@ -252,13 +290,27 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
             if a0_ > 0:
                 pres.append(min(1.0, (a1_ / a0_) ** .5 / .6))
     presence = sum(pres) / len(pres) if pres else 1.0
-    composition = (no_overlap + inside + margins + fill + clear + presence) / 6 * frame   # empty letterbox bars count against
+    # balance: no big dead area (a thin photo strip with an empty half page, copy pinned to one end of a column)
+    occupied = list(vb.values()) + [Box.of(n['box']) for n in design['nodes']
+                                    if n['type'] == 'image' and roles.get(n['id']) == 'background' and present(n)]
+    if (design.get('page') or {}).get('backdrop'):
+        occupied.append(canvas)                      # a blurred photo fill behind everything is not dead space
+    empty = largest_empty(occupied, W, H) if occupied else 1.0
+    # as airy as the designer's own layout is fine; only dead space beyond that counts
+    W0_, H0_ = float(original['page']['width']), float(original['page']['height'])
+    occ0 = [Box.of(n['box']) for n in original['nodes'] if n['type'] != 'group' and 'box' in n and not n.get('hidden')
+            and roles.get(n['id']) not in ('panel', 'decoration')]
+    empty0 = largest_empty(occ0, W0_, H0_) if occ0 else 0.0
+    balance = max(0.0, 1 - max(0.0, empty - max(.12, empty0 + .08)) * 3)
+    composition = (no_overlap + inside + margins + fill + clear + presence + balance) / 7 * frame   # empty letterbox bars count against
     if presence < .8:
         notes.append('Headline, button or photo much smaller than in the original.')
     if clash:
         notes.append(f'{clash} overlap{"s" if clash > 1 else ""}.')
     if fill < .7:
         notes.append(f'Only {used * 100:.0f}% of the canvas is used.')
+    if balance < .9:
+        notes.append(f'An empty area covers {empty * 100:.0f}% of the canvas.')
     if frame < .98:
         notes.append(f'Empty bars: the design covers {frame * 100:.0f}% of the canvas.')
     if excess > 0:
@@ -266,7 +318,10 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
 
     parts = {'content': content, 'legibility': legibility, 'faithfulness': faithfulness, 'composition': composition}
     if subject_kept is not None:
-        parts['subject'] = float(subject_kept)
+        # losing a bit of the subject's edge is fine; cutting a real part of it (half a person, a bottle's top)
+        # is not: below 90% kept the penalty grows faster
+        k_ = float(subject_kept)
+        parts['subject'] = k_ if k_ >= .9 else max(0.0, k_ - (.9 - k_) * 1.5)
     wsum = sum(PARTS[k] for k in parts)
     overall = sum(PARTS[k] * v for k, v in parts.items()) / wsum
     # the headline and the button carry the message: losing one costs more than its share
