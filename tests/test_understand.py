@@ -438,6 +438,11 @@ class RealPhotoTests(unittest.TestCase):
         self.assertEqual(sub['crop'], crop)                 # the designer's framing, not a new smart crop
         self.assertLess(sub['kept'], 1.0)                   # both hikers sit outside the centre
         self.assertEqual(load(d).to_json()['nodes'][0]['crop'], crop)   # survives a load / save round trip
+        from engine.adapt import adapt
+        res = adapt(d, [{'width': 1080, 'height': 1350}, {'width': 1200, 'height': 628}])['results']
+        same, wide = ({n['id']: n for n in r['design']['nodes']}['photo'] for r in res)
+        self.assertEqual(same['crop'], crop)                # original size: the designer's framing
+        self.assertNotEqual(wide['crop'], crop)             # other sizes: re-cropped around the subject
 
     def test_panorama_slides_to_the_boat(self):
         r, size = self.detect('boat-panorama.jpg', False)

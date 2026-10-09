@@ -90,12 +90,17 @@
         ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(cx, cy, sw * vw / 2, sh * vh / 2, 0, 0, Math.PI * 2); ctx.fill();
       }
       const label = (n.meta && n.meta.label) || n.role || 'image';
-      const fs = Math.max(10, Math.min(w, h) * .09);
+      const small = h < 140 || w / h > 2;            // a logo-sized placeholder: label centred and sized to the box
+      let fs = small ? h * .5 : Math.max(10, Math.min(w, h) * .09);
       ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (small) {
+        const tw = ctx.measureText(label).width;
+        if (tw > w * .8) { fs *= w * .8 / tw; ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`; }
+      }
       const hm = /^#?([0-9a-f]{6})$/i.exec(base), hv = hm ? parseInt(hm[1], 16) : 0;
       const lum = hm ? (.299 * ((hv >> 16) & 255) + .587 * ((hv >> 8) & 255) + .114 * (hv & 255)) / 255 : 0;
-      ctx.fillStyle = lum > .6 ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.8)';   // readable on light and dark placeholders
-      ctx.fillText(label, x + w / 2, y + h - Math.max(fs * 1.2, h * .1));
+      ctx.fillStyle = lum > .6 ? (small ? 'rgba(14,34,51,.85)' : 'rgba(0,0,0,.55)') : 'rgba(255,255,255,.8)';   // readable on light and dark placeholders
+      ctx.fillText(label, x + w / 2, small ? y + h / 2 : y + h - Math.max(fs * 1.2, h * .1));
     }
     ctx.restore();
   }
@@ -129,6 +134,19 @@
       ctx.fillStyle = design.page.background || '#fff'; ctx.fillRect(0, 0, design.page.width, design.page.height);
     }
     const redraw = () => draw(canvas, design, opts);
+    const bd = design.page.backdrop;   // a photo of the design, blurred and darkened, behind everything
+    if (bd && !v) {
+      const src = (design.nodes.find(n => n.id === bd.image) || {}).src;
+      const im = src ? loadImage(src, redraw) : null;
+      if (im && im.complete && im.naturalWidth) {
+        const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+        ctx.save(); ctx.filter = `blur(${(bd.blur || .04) * Math.max(W, H)}px)`;
+        const pad = (bd.blur || .04) * Math.max(W, H) * 2;        // overscan so the blur has no light edge
+        ctx.drawImage(im, (W - dw) / 2 - pad, (H - dh) / 2 - pad, dw + 2 * pad, dh + 2 * pad);
+        ctx.restore();
+        ctx.fillStyle = `rgba(0,0,0,${bd.dim == null ? .5 : bd.dim})`; ctx.fillRect(0, 0, W, H);
+      }
+    }
     const nodes = design.nodes.filter(n => n.type !== 'group' && !n.hidden)
       .map((n, i) => ({ n, z: n.z != null ? n.z : i })).sort((a, b) => a.z - b.z).map(o => o.n);
     for (const n of nodes) {
