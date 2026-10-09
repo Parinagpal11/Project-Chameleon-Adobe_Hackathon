@@ -672,6 +672,16 @@ def _notes(g, layers, roles, groups, grid, style, subjects) -> list[str]:
     return notes
 
 
+def _kept_in(sub: dict, crop: list) -> float:
+    """Share of the subject (all its parts) inside an image-relative crop."""
+    cx, cy, cw, ch = crop
+    tot = got = 0.0
+    for bx, by, bw, bh in sub.get('parts') or [sub['box']]:
+        tot += bw * bh
+        got += max(0.0, min(bx + bw, cx + cw) - max(bx, cx)) * max(0.0, min(by + bh, cy + ch) - max(by, cy))
+    return round(got / tot, 3) if tot > 0 else 1.0
+
+
 # ---------------------------------------------------------------- public
 
 def analyze(design, targets: list[dict] | None = None) -> dict:
@@ -693,8 +703,12 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
             sub = find_subject(n)
             slot = n.box.w / n.box.h if n.box.h else 1.0
             if sub.get('aspect'):
-                # detected on the whole photo: choose the crop around the subject
-                sub.update(smart_crop(sub['box'], sub['aspect'], slot, sub.get('parts')))
+                if n.crop:
+                    # the designer already framed the photo: at the original size keep their crop
+                    # (new sizes still re-crop around the subject)
+                    sub.update(crop=list(n.crop), kept=_kept_in(sub, n.crop))
+                else:   # detected on the whole photo: choose the crop around the subject
+                    sub.update(smart_crop(sub['box'], sub['aspect'], slot, sub.get('parts')))
                 cx, cy, cw, ch = sub['crop']
             else:
                 # given by the designer (relative to the slot as shown) or photo not readable:

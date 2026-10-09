@@ -1,0 +1,157 @@
+{
+  "format": "chameleon-graph/1",
+  "name": "Snow ad (comparison, Montserrat, matches Express base)",
+  "page": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#0E2233"
+  },
+  "nodes": [
+    {
+      "id": "photo",
+      "type": "image",
+      "box": [
+        0,
+        0,
+        1080,
+        1350
+      ],
+      "style": {
+        "fill": "#3E6E8E",
+        "radius": 0
+      },
+      "subject": [
+        0.3,
+        0.15,
+        0.45,
+        0.45
+      ],
+      "meta": {
+        "label": "mountain lake"
+      }
+    },
+    {
+      "id": "scrim",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        0,
+        697,
+        1080,
+        653
+      ],
+      "style": {
+        "fill": "#0E2233",
+        "radius": 0,
+        "opacity": 0.65
+      }
+    },
+    {
+      "id": "logo",
+      "type": "image",
+      "box": [
+        106,
+        65,
+        133,
+        77
+      ],
+      "style": {
+        "fill": "#FFFFFF",
+        "radius": 0
+      },
+      "role": "logo",
+      "meta": {
+        "label": "logo"
+      }
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "box": [
+        156,
+        743,
+        882,
+        260
+      ],
+      "text": "Find your quiet place",
+      "style": {
+        "fontSize": 122,
+        "fontWeight": 800,
+        "fontFamily": "Montserrat",
+        "color": "#FFFFFF",
+        "align": "left",
+        "lineHeight": 1.05
+      }
+    },
+    {
+      "id": "subhead",
+      "type": "text",
+      "box": [
+        156,
+        1058,
+        880,
+        46
+      ],
+      "text": "Cabins across the Alps from $89 a night.",
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 500,
+        "fontFamily": "Montserrat",
+        "color": "#DCE8F0",
+        "align": "left",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta-bg",
+      "type": "shape",
+      "shape": "rect",
+      "box": [
+        156,
+        1150,
+        389,
+        125
+      ],
+      "style": {
+        "fill": "#FFFFFF",
+        "radius": 62.5
+      }
+    },
+    {
+      "id": "cta-label",
+      "type": "text",
+      "box": [
+        168,
+        1187,
+        365,
+        51
+      ],
+      "text": "Book a cabin",
+      "style": {
+        "fontSize": 44,
+        "fontWeight": 700,
+        "fontFamily": "Montserrat",
+        "color": "#0E2233",
+        "align": "center",
+        "lineHeight": 1.15
+      }
+    },
+    {
+      "id": "cta",
+      "type": "group",
+      "children": [
+        "cta-bg",
+        "cta-label"
+      ]
+    }
+  ],
+  "meta": {
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "photo",
+      "left-aligned"
+    ],
+    "source": "seed (hand-laid stand-in)"
+  }
+}

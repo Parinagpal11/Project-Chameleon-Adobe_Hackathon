@@ -444,6 +444,12 @@ def objects_from_map(m):
     for c in comps:   # small but equally strong objects touching a kept one belong to the scene's subject (boat by a cliff)
         if c not in keep and c['mean'] >= best['mean'] * .9 and any(near(c, k) for k in keep):
             keep.append(c)
+    for c in comps:   # a second, equally crisp upright object far from the first (two hikers at either side of a
+        # ridge) is part of the scene's subject too, even though it is much smaller
+        x, y, w, h = c['box']
+        if (c not in keep and c['mean'] >= best['mean'] and c['peak'] >= .97 and c['mass'] >= best['mass'] * .1
+                and h * H >= w * W * 1.5 and c['area'] >= .01):
+            keep.append(c)
     for c in comps:   # a small, crisp, compact object (a sailboat on open water) is a subject even beside a big one
         x, y, w, h = c['box']
         # only in panoramas (where tiling makes a big neighbour dominate) and only upright shapes, so wide

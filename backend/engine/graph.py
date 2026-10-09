@@ -82,6 +82,7 @@ class Node:
     style: dict[str, Any] = field(default_factory=dict)
     src: str | None = None
     subject: Box | None = None    # region of interest inside an image, in image-relative 0..1 units
+    crop: list | None = None      # the part of the image the designer shows in the slot: image-relative [x, y, w, h]
     shape: str | None = None      # rect | ellipse | line
     children: list[str] = field(default_factory=list)
     parent: str | None = None
@@ -103,6 +104,7 @@ class Node:
                 out[k] = v
         if self.style: out['style'] = self.style
         if self.subject: out['subject'] = self.subject.list()
+        if self.crop: out['crop'] = list(self.crop)
         if self.children: out['children'] = self.children
         if self.meta: out['meta'] = self.meta
         return out
@@ -235,6 +237,12 @@ def from_graph_json(data: dict) -> Graph:
         if d.get('subject') is not None:
             subj = _box(d['subject'], f'Node {nid}: subject')
             subj = Box(max(0, min(1, subj.x)), max(0, min(1, subj.y)), max(0, min(1, subj.w)), max(0, min(1, subj.h)))
+        crop = None
+        if d.get('crop') is not None:
+            c = _box(d['crop'], f'Node {nid}: crop')
+            cx, cy = max(0.0, min(1.0, c.x)), max(0.0, min(1.0, c.y))
+            cw, ch = min(c.w, 1.0 - cx), min(c.h, 1.0 - cy)
+            crop = [round(v, 4) for v in (cx, cy, cw, ch)] if cw > 0 and ch > 0 else None
         kids = d.get('children') or []
         if not isinstance(kids, list):
             raise ValueError(f'Node {nid}: children must be a list of ids')
@@ -244,7 +252,7 @@ def from_graph_json(data: dict) -> Graph:
             raise ValueError(f'Node {nid}: src must be a string')
         nodes.append(Node(id=nid, type=t, box=box, z=int(_num(d.get('z', i), f'Node {nid}: z')), role=d.get('role') if isinstance(d.get('role'), str) else None,
                           text=None if text is None else str(text), style=_style(d.get('style'), nid), src=src,
-                          subject=subj, shape=d.get('shape') or ('rect' if t == 'shape' else None),
+                          subject=subj, crop=crop, shape=d.get('shape') or ('rect' if t == 'shape' else None),
                           children=[str(c) for c in kids], meta=dict(d.get('meta') or {}) if isinstance(d.get('meta'), dict) else {}))
     bg = page.get('background', '#ffffff')
     g = Graph(w, h, nodes, background=bg if isinstance(bg, str) else '#ffffff', name=str(data.get('name') or ''),

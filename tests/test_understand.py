@@ -411,6 +411,34 @@ class RealPhotoTests(unittest.TestCase):
         self.assertEqual(crop['kept'], 1.0)
         self.assertLess(crop['crop'][0], .2)                                # slid left, not centred
 
+    def test_two_hikers_far_apart_are_both_subjects(self):
+        # snowy ridge: orange hiker at the far left, blue hiker at the far right, tent and dog between.
+        # The left hiker is a small blob far from the rest; it used to be dropped as "too small".
+        r, size = self.detect('user-hard-snow.jpg', False)
+        self.assertEqual(r['source'], 'objects')
+        x, y, w, h = r['box']
+        self.assertLess(x, .05, r['box'])                 # reaches the orange hiker
+        self.assertGreater(x + w, .95, r['box'])          # and the blue one
+        self.assertGreaterEqual(len(r.get('parts') or []), 2)
+
+    def test_designer_crop_is_kept_at_the_original_size(self):
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow not installed')
+        raw = (self.PHOTOS / 'user-hard-snow.jpg').read_bytes()
+        src = 'data:image/jpeg;base64,' + base64.b64encode(raw).decode()
+        crop = [.2754, 0, .4492, 1]                         # centred fill of a 16:9 photo in a 4:5 slot
+        d = {'format': 'chameleon-graph/1', 'page': {'width': 1080, 'height': 1350},
+             'nodes': [{'id': 'photo', 'type': 'image', 'box': [0, 0, 1080, 1350], 'src': src, 'crop': crop},
+                       {'id': 'h', 'type': 'text', 'box': [80, 900, 900, 120], 'text': 'Find your quiet place',
+                        'style': {'fontSize': 56, 'fontWeight': 800}}]}
+        subject._cache.clear()
+        sub = analyze(d)['subjects']['photo']
+        self.assertEqual(sub['crop'], crop)                 # the designer's framing, not a new smart crop
+        self.assertLess(sub['kept'], 1.0)                   # both hikers sit outside the centre
+        self.assertEqual(load(d).to_json()['nodes'][0]['crop'], crop)   # survives a load / save round trip
+
     def test_panorama_slides_to_the_boat(self):
         r, size = self.detect('boat-panorama.jpg', False)
         for slot in (1080 / 1350, 600 / 628, 1.0):

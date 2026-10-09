@@ -423,7 +423,7 @@
         const k = Math.min(1, maxSide / Math.max(sw, sh));
         const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
         c.getContext('2d').drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', .88));
+        URL.revokeObjectURL(url); resolve({ src: c.toDataURL('image/jpeg', .88), aspect: sw / sh });
       };
       im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can open.')); };
       im.src = url;
@@ -437,8 +437,13 @@
     const target = photoTarget(d, S.analysis);
     if (!target) return showError('This design has no photo to replace. Pick one with a photo, e.g. “Travel overlay”.');
     try {
-      target.src = await fileToDataURL(file);
-      delete target.crop;
+      const img = await fileToDataURL(file);
+      target.src = img.src;
+      // placed the way an editor drops a photo into a frame: centred, filling the slot. Chameleon keeps
+      // this framing at the original size and re-crops around the subject for every other size.
+      const slot = target.box[2] / Math.max(1, target.box[3]);
+      target.crop = img.aspect > slot ? [(1 - slot / img.aspect) / 2, 0, slot / img.aspect, 1]
+                                      : [0, (1 - img.aspect / slot) / 2, 1, img.aspect / slot];
       delete target.subject;                 // make the engine find it
       target.meta = { ...(target.meta || {}), label: 'your photo' };
       S.mine = target.id;
