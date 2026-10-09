@@ -61,8 +61,16 @@ class AdaptTestSet(unittest.TestCase):
             for res in r['results']:
                 vis = visible(res)
                 for nid, role in roles.items():
-                    if role in ('headline',):
+                    if role in ('headline', 'cta', 'logo'):      # the must-keep set, even on a 728x90 banner
                         self.assertIn(nid, vis, (i, res['width'], res['height'], nid))
+
+    def test_big_sizes_score_at_least_95(self):
+        # small banners may drop low-priority text (captions, legal, eyebrows); every other size must not lose much
+        banners = {(300, 250), (728, 90), (160, 600)}
+        for i, r in self.out.items():
+            for res in r['results']:
+                if (round(res['width']), round(res['height'])) not in banners:
+                    self.assertGreaterEqual(res['score']['overall'], 95, (i, res['width'], res['height'], res['score']['notes']))
 
     def test_subjects_are_kept(self):
         for i, r in self.out.items():
