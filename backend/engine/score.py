@@ -266,7 +266,8 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     # copy should not cover the photo subject more than the designer's own layout did
     under = _subject_under_copy(out, a)
     excess = max(0.0, under - a.get('_orig_under', 0.0) - .03)
-    faces = any(sub.get('source') in ('faces', 'people') for sub in a['subjects'].values())
+    faces = any((sub.get('inner_source') if sub.get('source') == 'whole' else sub.get('source')) in ('faces', 'people')
+                or sub.get('faces_in_focus') for sub in a['subjects'].values())
     clear = max(0.0, 1 - (6 if faces else 3) * excess)       # copy on a face is worse than on an object
     # presence: the headline, the button and the main photo keep about the weight they had on the original canvas
     W0, H0 = float(original['page']['width']), float(original['page']['height'])
@@ -289,6 +290,15 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
             a1_ = (n1['box'][2] * n1['box'][3]) / (W * H)
             if a0_ > 0:
                 pres.append(min(1.0, (a1_ / a0_) ** .5 / .6))
+    else:
+        # a full-bleed photo that became a panel or a thumbnail: it should still read as the design's picture
+        bg0 = [n for n in original['nodes'] if n['type'] == 'image' and roles.get(n['id']) == 'background']
+        if bg0:
+            p0 = max(bg0, key=lambda n: n['box'][2] * n['box'][3])
+            n1 = out.get(p0['id'])
+            if present(n1) and p0['box'][2] * p0['box'][3] >= W0 * H0 * .5:
+                a1_ = (n1['box'][2] * n1['box'][3]) / (W * H)
+                pres.append(min(1.0, a1_ ** .5 / .5))
     presence = sum(pres) / len(pres) if pres else 1.0
     # balance: no big dead area (a thin photo strip with an empty half page, copy pinned to one end of a column)
     occupied = list(vb.values()) + [Box.of(n['box']) for n in design['nodes']

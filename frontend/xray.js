@@ -130,7 +130,7 @@
       for (const [id, s] of Object.entries(a.subjects)) {
         const boxes = s.page_parts && s.page_parts.length ? s.page_parts : [s.page_box];
         const many = boxes.length > 1;
-        boxes.forEach((b, i) => frames.push({ b, text: s.source === 'faces' ? (many ? `Face ${i + 1}` : 'Face') : s.source === 'people' ? (many ? `Person ${i + 1}` : 'Person') : (s.source === 'assumed' ? 'Centre (no subject found)' : (many ? `Subject ${i + 1}` : 'Subject')), dim: s.source === 'assumed' }));
+        boxes.forEach((b, i) => frames.push({ b, text: s.source === 'focus' ? 'Your focus area' : s.source === 'whole' ? 'Whole photo' : s.source === 'faces' ? (many ? `Face ${i + 1}` : 'Face') : s.source === 'people' ? (many ? `Person ${i + 1}` : 'Person') : (s.source === 'assumed' ? 'Centre (no subject found)' : (many ? `Subject ${i + 1}` : 'Subject')), dim: s.source === 'assumed' }));
       }
       // labels avoid the design's other elements (logo, text, buttons) and each other
       const photoIds = new Set(Object.keys(a.subjects));
@@ -232,8 +232,9 @@
       el('span', { class: 'xr-pill', text: `${a.grid.alignment} aligned` }),
       meta.level ? el('span', { class: 'xr-pill', text: meta.level }) : null,
       S.mine && a.subjects[S.mine] ? el('span', { class: 'xr-pill mine', role: 'status',
-        text: `Your photo: subject ${({ saliency: 'found by saliency', faces: 'found by face detection', people: 'found by person detection', objects: 'found by object detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
+        text: `Your photo: subject ${({ focus: 'set by your focus area', whole: 'is the whole photo', saliency: 'found by saliency', faces: 'found by face detection', people: 'found by person detection', objects: 'found by object detection', assumed: 'not found, centre assumed', given: 'given' })[a.subjects[S.mine].source]} · confidence ${Math.round(a.subjects[S.mine].confidence * 100)}% ${a.subjects[S.mine].source !== 'assumed' && a.subjects[S.mine].kept != null ? ` · ${Math.round(a.subjects[S.mine].kept * 100)}% of it kept in the crop` : ''}` }) : null].filter(Boolean));
     $('xr-notes').replaceChildren(...a.notes.map(n => el('li', { text: n })));
+    renderFraming();
     $('xr-gcount').textContent = a.groups.length;
     const orderPos = Object.fromEntries(a.reading_order.map((id, i) => [id, i + 1]));
     const idx = Object.fromEntries(a.groups.map((g, i) => [g.id, i]));
@@ -393,8 +394,12 @@
       if (ticket !== S.ticket) return false;   // a newer design was picked meanwhile
       for (const [id, s] of Object.entries(analysis.subjects || {})) {   // draw photos with the engine's crop
         const node = design.nodes.find(n => n.id === id);
-        if (node && node.src && s.crop) node.crop = s.crop;
+        if (node && node.src && s.crop) {
+          if (!node.crop || autoCropped.has(node)) autoCropped.add(node);   // the engine's framing, not the designer's
+          node.crop = s.crop;
+        }
       }
+      if (design !== S.design) S.frameMode = null;
       S.design = design; S.analysis = analysis; S.hot = null;
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       renderPanel(); fit();
@@ -406,6 +411,86 @@
     S.mine = null;
     try { await show(await api('/testset/' + encodeURIComponent(id))); history.replaceState(null, '', '#d=' + id + (S.view === 'resize' ? '&v=resize' : '')); }
     catch (e) { showError(e.message); }
+  }
+
+  // ---------------------------------------------------------------- photo framing (auto / focus area / whole photo)
+  const autoCropped = new WeakSet();
+  const FRAME_HINT = {
+    auto: 'Chameleon finds the subject (faces, people, objects) and frames every size around it.',
+    focusNew: 'Drag on the photo to mark what must stay in view at every size.',
+    focus: 'Every size keeps your focus area in view. Drag on the photo to redraw it.',
+    whole: 'Every size shows the entire photo, never cropped. Space around it is filled, not left blank.',
+  };
+  function framingOf(t) {
+    const m = (t && t.meta) || {};
+    return m.keepWhole ? 'whole' : m.focus ? 'focus' : 'auto';
+  }
+  function renderFraming() {
+    const card = $('xr-frame-card');
+    const t = S.design && S.analysis && photoTarget(S.design, S.analysis);
+    card.hidden = !(t && t.src && S.analysis.subjects[t.id]);
+    if (card.hidden) { $('xr-art').classList.remove('drawing'); return; }
+    const mode = S.frameMode || framingOf(t);
+    card.querySelectorAll('[data-mode]').forEach(b => { b.setAttribute('aria-checked', String(b.dataset.mode === mode)); b.tabIndex = b.dataset.mode === mode ? 0 : -1; });
+    $('xr-frame-hint').textContent = mode === 'focus' ? (t.meta && t.meta.focus ? FRAME_HINT.focus : FRAME_HINT.focusNew) : FRAME_HINT[mode];
+    $('xr-art').classList.toggle('drawing', mode === 'focus');
+  }
+  async function setFraming(mode, focus) {
+    const t0 = photoTarget(S.design, S.analysis);
+    if (!t0) return;
+    if (mode === 'focus' && !focus) {             // wait for the designer to draw the box
+      S.frameMode = 'focus'; renderFraming();
+      if (!(t0.meta && t0.meta.focus)) return;
+      focus = t0.meta.focus;
+    }
+    const d = JSON.parse(JSON.stringify(S.design));
+    S.design.nodes.forEach((n, i) => { if (autoCropped.has(n)) delete d.nodes[i].crop; });   // let the engine re-frame
+    const t = d.nodes.find(n => n.id === t0.id);
+    const meta = { ...(t.meta || {}) };
+    delete meta.focus; delete meta.keepWhole;
+    if (mode === 'focus') meta.focus = focus.map(v => Math.round(v * 1e4) / 1e4);
+    if (mode === 'whole') meta.keepWhole = true;
+    t.meta = meta;
+    const btns = $('xr-frame-card').querySelectorAll('button');
+    btns.forEach(b => (b.disabled = true));
+    const mine = S.mine;
+    try { if (await show(d)) S.mine = mine; } finally { btns.forEach(b => (b.disabled = false)); S.frameMode = null; renderFraming(); }
+  }
+  function artPoint(ev) {
+    const r = $('xr-art').getBoundingClientRect();
+    return [(ev.clientX - r.left) / S.scale, (ev.clientY - r.top) / S.scale];
+  }
+  function startFocusDraw(ev) {
+    if (!$('xr-art').classList.contains('drawing') || ev.button !== 0) return;
+    const t = photoTarget(S.design, S.analysis);
+    if (!t) return;
+    const [bx, by, bw, bh] = t.box;
+    const W = S.design.page.width, H = S.design.page.height;
+    const vis = [Math.max(0, bx), Math.max(0, by), Math.min(W, bx + bw), Math.min(H, by + bh)];
+    const clamp = ([x, y]) => [Math.min(vis[2], Math.max(vis[0], x)), Math.min(vis[3], Math.max(vis[1], y))];
+    const p0 = artPoint(ev);
+    if (p0[0] < vis[0] || p0[0] > vis[2] || p0[1] < vis[1] || p0[1] > vis[3]) return;
+    ev.preventDefault();
+    const art = $('xr-art'); art.setPointerCapture(ev.pointerId);
+    const draft = svg('rect', { class: 'focus-draft', x: p0[0], y: p0[1], width: 0, height: 0 }, $('xr-overlay'));
+    let box = null;
+    const move = e => {
+      const p = clamp(artPoint(e));
+      box = [Math.min(p0[0], p[0]), Math.min(p0[1], p[1]), Math.abs(p[0] - p0[0]), Math.abs(p[1] - p0[1])];
+      draft.setAttribute('x', box[0]); draft.setAttribute('y', box[1]); draft.setAttribute('width', box[2]); draft.setAttribute('height', box[3]);
+    };
+    const up = () => {
+      art.removeEventListener('pointermove', move); art.removeEventListener('pointerup', up); art.removeEventListener('pointercancel', up);
+      draft.remove();
+      const min = 12 / S.scale;                          // ignore a click or a tiny accidental drag
+      if (!box || box[2] < min || box[3] < min) return;
+      const [cx, cy, cw, ch] = t.crop || [0, 0, 1, 1];   // canvas → image: through the crop the photo is drawn with
+      const u = v => Math.min(1, Math.max(0, v));
+      const x0 = u(cx + (box[0] - bx) / bw * cw), y0 = u(cy + (box[1] - by) / bh * ch);
+      const x1 = u(cx + (box[0] + box[2] - bx) / bw * cw), y1 = u(cy + (box[1] + box[3] - by) / bh * ch);
+      setFraming('focus', [x0, y0, x1 - x0, y1 - y0]);
+    };
+    art.addEventListener('pointermove', move); art.addEventListener('pointerup', up); art.addEventListener('pointercancel', up);
   }
 
   // ---------------------------------------------------------------- your photo
@@ -449,6 +534,7 @@
       } else delete target.crop;
       delete target.subject;                 // make the engine find it
       target.meta = { ...(target.meta || {}), label: 'your photo' };
+      delete target.meta.focus;              // a focus area drawn on the previous photo means nothing on this one
       S.mine = target.id;
       await show(d);
     } catch (e) { showError(e.message); }
@@ -493,6 +579,16 @@
       fs.append(el('label', { class: 'xr-toggle', style: `--swatch:${l.swatch}` }, input, el('span', { text: l.label })));
     }
     $('xr-art').addEventListener('pointermove', hitTest);
+    $('xr-art').addEventListener('pointerdown', startFocusDraw);
+    const seg = $('xr-frame-card').querySelector('.xr-seg');
+    seg.addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && !b.disabled) setFraming(b.dataset.mode); });
+    seg.addEventListener('keydown', e => {                 // radio group: arrows move the choice
+      if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+      e.preventDefault();
+      const bs = [...seg.querySelectorAll('[data-mode]')], i = bs.findIndex(b => b.getAttribute('aria-checked') === 'true');
+      const n = bs[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length];
+      n.focus(); setFraming(n.dataset.mode);
+    });
     $('xr-art').addEventListener('pointerleave', () => setHot(null));
     $('xr-design').addEventListener('change', e => { if (e.target.value && !e.target.value.startsWith('import:')) pick(e.target.value); });
     $('xr-file').addEventListener('change', async e => {

@@ -444,6 +444,67 @@ class RealPhotoTests(unittest.TestCase):
         self.assertEqual(same['crop'], crop)                # original size: the designer's framing
         self.assertNotEqual(wide['crop'], crop)             # other sizes: re-cropped around the subject
 
+    def test_snow_ad_story_and_small_ad(self):
+        """The comparison ad (wide snow scene, people at both edges): the story keeps the whole scene in a
+        framed layout, the 300x250 keeps the subhead (logo on the button row), every size scores >= 95."""
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow not installed')
+        from engine.adapt import adapt
+        d = json.loads((ROOT / 'examples' / 'comparison' / 'snow-ad-montserrat.json').read_text())
+        p = next(n for n in d['nodes'] if n['id'] == 'photo')
+        p['src'] = 'data:image/jpeg;base64,' + base64.b64encode((self.PHOTOS / 'user-hard-snow.jpg').read_bytes()).decode()
+        p['crop'] = [.2754, 0, .4492, 1]
+        p.pop('subject', None)
+        subject._cache.clear()
+        res = {(r['width'], r['height']): r for r in adapt(d, EVAL_SIZES)['results']}
+        story = res[(1080, 1920)]
+        self.assertTrue(story['layout_label'].startswith('Photo framed in the middle'), story['layout_label'])
+        self.assertEqual(story['checks']['subject_kept'], 1.0)
+        self.assertIn('Layout kept', [x['label'] for x in story['alternatives']])
+        small = res[(300, 250)]
+        hidden = {n['id'] for n in small['design']['nodes'] if n.get('hidden')}
+        self.assertNotIn('subhead', hidden)
+        self.assertNotIn('logo', hidden)
+        for size, r in res.items():
+            self.assertTrue(r['checks']['ok'], (size, r['checks']))
+            self.assertGreaterEqual(r['score']['overall'], 95, (size, r['score']))
+
+    def _snow_with(self, meta):
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            self.skipTest('Pillow not installed')
+        from engine.adapt import adapt
+        d = json.loads((ROOT / 'examples' / 'comparison' / 'snow-ad-montserrat.json').read_text())
+        p = next(n for n in d['nodes'] if n['id'] == 'photo')
+        p['src'] = 'data:image/jpeg;base64,' + base64.b64encode((self.PHOTOS / 'user-hard-snow.jpg').read_bytes()).decode()
+        p['meta'] = {**{k: v for k, v in (p.get('meta') or {}).items() if k != 'fixedCrop'}, **meta}
+        p.pop('crop', None)
+        p.pop('subject', None)
+        subject._cache.clear()
+        return {(r['width'], r['height']): r for r in adapt(d, EVAL_SIZES)['results']}
+
+    def test_keep_whole_photo_shows_all_of_it_at_every_size(self):
+        """'Keep whole photo': every size shows the entire image (never cropped), with no blank gaps, and scores >= 95."""
+        for size, r in self._snow_with({'keepWhole': True}).items():
+            self.assertGreaterEqual(r['checks']['subject_kept'], .98, size)
+            self.assertTrue(r['checks']['ok'], (size, r['checks']))
+            self.assertGreaterEqual(r['score']['overall'], 95, (size, r['score']))
+            ph = next(n for n in r['design']['nodes'] if n['id'] == 'photo')
+            self.assertGreater(ph['crop'][2] * ph['crop'][3], .97, size)
+            for n in r['design']['nodes']:
+                if n['type'] == 'text' and not n.get('hidden'):
+                    self.assertGreaterEqual(n['box'][2] * n['box'][3], 1, (size, n['id']))
+
+    def test_focus_box_is_kept_whole(self):
+        """A focus box the designer drew (the dog) stays in view at every size."""
+        res = self._snow_with({'focus': [0.42, 0.62, 0.2, 0.25]})
+        for size, r in res.items():
+            self.assertGreaterEqual(r['checks']['subject_kept'], .95, size)
+            self.assertGreaterEqual(r['score']['overall'], 95, (size, r['score']))
+
     def test_panorama_slides_to_the_boat(self):
         r, size = self.detect('boat-panorama.jpg', False)
         for slot in (1080 / 1350, 600 / 628, 1.0):

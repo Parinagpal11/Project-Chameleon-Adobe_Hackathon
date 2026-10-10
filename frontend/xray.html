@@ -55,6 +55,15 @@
   </section>
 
   <aside class="xr-panel" id="xr-panel" aria-label="What Chameleon sees">
+    <section class="xr-card" id="xr-frame-card" hidden>
+      <h2>Photo framing</h2>
+      <div class="xr-seg" role="radiogroup" aria-label="How every size frames the photo">
+        <button type="button" role="radio" data-mode="auto" aria-checked="true">Auto</button>
+        <button type="button" role="radio" data-mode="focus" aria-checked="false">Focus area</button>
+        <button type="button" role="radio" data-mode="whole" aria-checked="false">Whole photo</button>
+      </div>
+      <p class="xr-hint xr-frame-hint" id="xr-frame-hint" aria-live="polite"></p>
+    </section>
     <section class="xr-card">
       <h2>What Chameleon sees</h2>
       <ul class="xr-notes" id="xr-notes"></ul>

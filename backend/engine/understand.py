@@ -664,7 +664,8 @@ def _notes(g, layers, roles, groups, grid, style, subjects) -> list[str]:
     for iid, sub in subjects.items():
         if sub['source'] != 'assumed':
             how = {'given': 'marked in the design', 'faces': 'found by face detection', 'people': 'found by person detection',
-                   'objects': 'found by object detection', 'saliency': 'found by saliency'}[sub['source']]
+                   'objects': 'found by object detection', 'saliency': 'found by saliency',
+           'focus': 'marked by the designer (focus)', 'whole': 'the whole photo (keep whole)'}.get(sub['source'], sub['source'])
             notes.append(f"Subject of photo “{iid}” {how}.")
     if layers['decoration']:
         notes.append(f"{len(layers['decoration'])} decorative element(s) can move or drop when space is tight.")

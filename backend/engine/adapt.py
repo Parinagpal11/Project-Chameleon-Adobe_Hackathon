@@ -817,7 +817,8 @@ def subject_boxes(out: dict, a: dict) -> list:
             continue
         x, y, w, h = n['box']
         cx, cy, cw, ch = n.get('crop') or [0, 0, 1, 1]
-        for pb in sub.get('parts') or [sub['box']]:
+        pbs = (sub.get('inner') if sub.get('source') == 'whole' else None) or sub.get('parts') or [sub['box']]
+        for pb in pbs:
             q = Box(x + (pb[0] - cx) / cw * w, y + (pb[1] - cy) / ch * h, pb[2] / cw * w, pb[3] / ch * h)
             if q.inter(Box(x, y, w, h)) > 0:
                 res.append((nid, q))
@@ -875,7 +876,7 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         given = g.by_id[nid].crop
         same_slot = (abs(W - g.width) < .5 and abs(H - g.height) < .5
                      and all(abs(u - v) < .5 for u, v in zip(nb, ob.list())))
-        if given and same_slot:
+        if given and same_slot and sub.get('source') != 'whole':
             # original size, photo where the designer put it: keep their framing
             n['crop'] = list(given)
             crops[nid] = 1.0
@@ -901,11 +902,18 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         n['crop'] = c['crop']
         # scored like the naive resizes: the share of what the ORIGINAL showed of the subject
         # (a designer may have framed only part of it)
-        crops[nid] = min(1.0, c['kept'] / max(sub.get('kept') or 1.0, 1e-6))
-        if sub.get('source') != 'assumed' and c['kept'] >= .999:
-            reasons.append(f"Photo cropped around its subject ({sub['source']}): 100% kept.")
-        elif sub.get('source') != 'assumed':
-            reasons.append(f"Photo cropped around its subject: {c['kept'] * 100:.0f}% kept (the rest doesn't fit this shape).")
+        crops[nid] = c['kept'] if sub.get('source') == 'whole' else \
+            min(1.0, c['kept'] / max(sub.get('kept') or 1.0, 1e-6))      # 'keep whole' means the whole image
+        src = sub.get('source')
+        what = 'your focus area' if src == 'focus' else 'its subject'
+        if src == 'whole':
+            if c['kept'] < .999:
+                reasons.append(f"Only {c['kept'] * 100:.0f}% of the photo fits this shape.")
+        elif src != 'assumed' and c['kept'] >= .999:
+            reasons.append(f"Photo cropped around {what} ({src}): 100% kept." if src != 'focus'
+                           else f"Photo cropped around {what}: 100% kept.")
+        elif src != 'assumed':
+            reasons.append(f"Photo cropped around {what}: {c['kept'] * 100:.0f}% kept (the rest doesn't fit this shape).")
     _logos_off_subjects(out, a, W, H, reasons)
     nodes = [out[n['id']] for n in design['nodes']]
     for n in nodes:      # photos are not repeated per size: the client re-attaches them by id
@@ -1010,14 +1018,17 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
             under = _subject_under_copy({n['id']: n for n in res['design']['nodes']}, a) if a['subjects'] else 0.0
             covered = under > max(.25, a.get('_orig_under', 0.0) + .1) \
                 and not (same and a.get('_pinned_crop'))     # copy sits on the (new) photo's subject
-            if (not same and kept is not None and kept < .9) or covered:
+            whole = any(sub.get('source') == 'whole' for sub in a['subjects'].values())
+            if ((not same or whole) and kept is not None and kept < (.98 if whole else .9)) or covered:
                 # keeping the layout loses most of the photo's subject (a wide scene in a tall story):
                 # also try the rebuilt layout and keep whichever scores higher
                 alt = reflow_one(design, g, a, W, H, 2)
                 alt = _pick_layout(alt, design, g, a, W, H, 2)
                 alt.pop('alternatives', None)
                 alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
-                res = _tall_variants(alt, design, g, a, W, H, 2, head, kept_layout=res)
+                res = _tall_variants(alt, design, g, a, W, H, 2, head, kept_layout=res, kept_last=whole)
+                res = _fill_variants(res, design, g, a, W, H, head)
+            res.pop('_args', None)
             return {**meta, **res}
     res = reflow_one(design, g, a, W, H, tier)
     res = _pick_layout(res, design, g, a, W, H, tier)
@@ -1036,19 +1047,62 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
             c['reasons'] = list(dict.fromkeys([head] + c['reasons']))
         if len(cands) > 1:
             res, _, _ = _best_of(cands, design, a)
+    res = _fill_variants(res, design, g, a, W, H, head)
     for alt in res.get('alternatives', []):
         alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
+    res.pop('_args', None)
     return {**meta, **res}
 
 
-def _best_of(cands: list, design: dict, a: dict) -> dict:
+FILL_LABEL = {'type': 'Bigger type', 'space': 'Even spacing', 'photo': 'Bigger photo'}
+
+
+def _fill_variants(res: dict, design: dict, g, a: dict, W: float, H: float, head: str) -> dict:
+    """The chosen layout leaves a dead area: also try it with bigger type and with the message spread out,
+    score them, keep the best (the rest go under 'Layouts tried')."""
+    args = res.get('_args')
+    if not args or args.get('fill'):
+        return res
+    sc = _quick_score(res, design, a)
+    if not any(n.startswith('An empty area') for n in sc.get('notes', [])):
+        return res
+    base = {k_: v for k_, v in args.items() if k_ not in ('fill', 'tier')}
+    old = res.pop('alternatives', [])
+    cands = [(res.get('layout_label') or 'Layout rebuilt', res)]
+    fills = ['type', 'space']
+    if any('side panel' in r or 'panel at the' in r for r in res['reasons']) and not args.get('tall'):
+        fills.append('photo')
+    for f in fills:
+        alt = reflow_one(design, g, a, W, H, args['tier'], fill=f, **base)
+        alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
+        same = [n.get('box') for n in alt['design']['nodes']] == [n.get('box') for n in res['design']['nodes']]
+        if alt['checks']['ok'] and not same:          # an identical layout is not another option
+            cands.append((f"{cands[0][0]} · {FILL_LABEL[f].lower()}" if res.get('layout_label') else FILL_LABEL[f], alt))
+    if len(cands) == 1:
+        if old:
+            res['alternatives'] = old
+        return res
+    chosen, best, first = _best_of(cands, design, a, .2)
+    if chosen is not res:
+        chosen['reasons'] = list(dict.fromkeys(chosen['reasons'] + [
+            f"{FILL_LABEL[chosen['_args']['fill']]} fills the empty space better ({best[2]['overall']:.0f} vs {first[2]['overall']:.0f})."]))
+    seen = {lab for lab in (x['label'] for x in chosen.get('alternatives', []))}
+    chosen['alternatives'] = chosen.get('alternatives', []) + [x for x in old if x['label'] not in seen and x['design'] is not chosen['design']]
+    return chosen
+
+
+def _best_of(cands: list, design: dict, a: dict, margin: float = 1.0) -> dict:
     """cands: [(label, result)], the first is the default. Score each; a later one wins only if its checks pass
     and it scores more than a point higher. The others are kept as alternatives."""
     scored = [(lab, r, _quick_score(r, design, a)) for lab, r in cands]
     best = scored[0]
-    for c in scored[1:]:
-        if c[1]['checks']['ok'] and c[2]['overall'] > best[2]['overall'] + 1.0:
-            best = c
+    # among the rebuilt variants the best score wins; the default (the designer's own layout, or the rules'
+    # first choice) is only replaced when one beats it by more than a point
+    rivals = [c for c in scored[1:] if c[1]['checks']['ok']]
+    hi = max((c[2]['overall'] for c in rivals), default=None)
+    top = next((c for c in rivals if c[2]['overall'] >= hi - .3), None) if rivals else None   # near-ties: the earlier one
+    if top is not None and top[2]['overall'] > best[2]['overall'] + margin:
+        best = top
     chosen = best[1]
     chosen['layout_label'] = best[0]
     chosen['alternatives'] = [{'label': lab, 'design': r['design'], 'reasons': r['reasons'], 'checks': r['checks'],
@@ -1061,7 +1115,7 @@ TALL_LABEL = {None: 'Photo panel', 'frame': 'Photo framed in the middle', 'blur'
 
 
 def _tall_variants(res: dict, design: dict, g, a: dict, W: float, H: float, tier: int, head: str,
-                   kept_layout: dict | None = None) -> dict:
+                   kept_layout: dict | None = None, kept_last: bool = False) -> dict:
     """A full-bleed photo that had to become a panel on a tall canvas: also try it framed in the middle and on a
     blurred fill of itself, plus (tier 1) the layout as designed; keep the best."""
     cands = []
@@ -1078,8 +1132,16 @@ def _tall_variants(res: dict, design: dict, g, a: dict, W: float, H: float, tier
     else:
         cands.append((res.get('layout_label') or ('Copy moved off the subject' if a['style']['structure'] == 'overlay'
                                                   else 'Layout rebuilt'), res))
-    chosen, best, first = _best_of(cands, design, a)
-    if kept_layout is not None and chosen is not kept_layout:
+    if kept_last and kept_layout is not None:
+        # 'keep whole photo': the designer asked for all of it, so the rebuilt layouts come first and the
+        # cropped original layout has to clearly beat them
+        cands = cands[1:] + cands[:1]
+    chosen, best, first = _best_of(cands, design, a, 1.0 if kept_layout is not None else .3)
+    if kept_last and kept_layout is not None and chosen is not kept_layout:
+        kk = kept_layout['checks'].get('subject_kept') or 0
+        chosen['reasons'] = list(dict.fromkeys(chosen['reasons'] + [
+            f"Keeping the layout would show only {kk * 100:.0f}% of the photo, and all of it was asked for, so the layout was rebuilt."]))
+    elif kept_layout is not None and chosen is not kept_layout:
         kk = kept_layout['checks'].get('subject_kept')
         why = (f"Keeping the layout would show only {kk * 100:.0f}% of the photo's subject"
                if kk is not None and kk < .9 else "Keeping the layout would put the copy on the photo's subject")
@@ -1136,11 +1198,14 @@ def _pick_layout(res: dict, design: dict, g, a: dict, W: float, H: float, tier: 
 
 
 def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=None, cards_beside=None, tall=None,
-               side=False, logo_by_cta=False) -> dict:
+               side=False, logo_by_cta=False, fill=None) -> dict:
     """`orient` ('beside'/'above') and `cards_beside` force a layout family; None lets the rules choose.
     `tall` ('frame' / 'blur') changes how a full-bleed photo that must become a panel sits on a tall canvas:
     'frame' puts the photo in the middle with the message above and the button below; 'blur' keeps the panel
-    and fills the page behind it with a blurred, darkened copy of the same photo."""
+    and fills the page behind it with a blurred, darkened copy of the same photo.
+    `fill` ('type' / 'space') is for canvases where the copy leaves dead space: 'type' starts the type bigger
+    (the fit loop still shrinks it to fit), 'space' opens up the gaps between the lines of the message."""
+    args = dict(orient=orient, cards_beside=cards_beside, tall=tall, side=side, logo_by_cta=logo_by_cta)
     s = min(W / g.width, H / g.height)
     reasons: list[str] = []
     out = _fresh(design)
@@ -1288,6 +1353,28 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             elif ra < ha / 1.3:
                 nh = photo_region.w / ha * 1.3
                 photo_region = Box(photo_region.x, photo_region.cy - nh / 2, photo_region.w, nh)
+        hsub = a['subjects'].get(hero['members'][0]) if photo_region else None
+        if hsub and hsub.get('source') == 'whole' and hsub.get('aspect'):
+            # the designer wants all of the photo: the slot takes the photo's own shape, and the copy gets
+            # whatever room that frees (never less than its minimum)
+            ia = hsub['aspect']
+            if photo_mode == 'beside':
+                left = photo_region.x < copy_region.x
+                cmin = max(W * .32, min(W * .6, 150.0)) if not (tier == 3 and aspect > 3) else W * .4
+                nw = min(max(photo_region.h * ia, W * .12), max(W * .12, W - 3 * m - cmin))
+                photo_region = Box(photo_region.x if left else photo_region.r - nw, photo_region.y, nw, photo_region.h)
+                copy_region = Box(photo_region.r + m, copy_region.y, W - photo_region.r - 2 * m, copy_region.h) if left \
+                    else Box(m, copy_region.y, photo_region.x - 2 * m, copy_region.h)
+            else:
+                top = photo_region.y < copy_region.y
+                nh = min(max(photo_region.w / ia, H * .2), H * (.64 if tier < 3 else .5))
+                photo_region = Box(photo_region.x, photo_region.y if top else photo_region.b - nh, photo_region.w, nh)
+                copy_region = Box(m, photo_region.b + m, W - 2 * m, H - photo_region.b - 2 * m) if top else \
+                    Box(m, m, W - 2 * m, photo_region.y - 2 * m)
+            pw, ph = photo_region.w, photo_region.h
+            fw, fh = (pw, pw / ia) if pw / ph < ia else (ph * ia, ph)
+            photo_region = Box(photo_region.x + (pw - fw) / 2, photo_region.y + (ph - fh) / 2, fw, fh)
+            reasons.append('All of the photo is shown, as asked.')
         if photo_region:
             for nid in hero['members']:
                 _set_photo(out, g.by_id[nid], photo_region.list())
@@ -1314,11 +1401,15 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                 return Box(frame.x + (pb[0] - crop[0]) / crop[2] * frame.w, frame.y + (pb[1] - crop[1]) / crop[3] * frame.h,
                            pb[2] / crop[2] * frame.w, pb[3] / crop[3] * frame.h)
 
-            tol = .02 if sub.get('source') in ('faces', 'people') else .15     # never even the edge of a face
+            whole = sub.get('source') == 'whole'
+            src_ = sub.get('inner_source') if whole else sub.get('source')
+            strict = src_ in ('faces', 'people') or sub.get('faces_in_focus')
+            tol = .02 if strict else .15     # never even the edge of a face
+            cover_parts = (sub.get('inner') or parts) if whole else parts   # 'whole': copy stays off what's in it
 
             def covers(region):
                 """Would copy in `region` sit on a person or object of the full-bleed photo?"""
-                return any(region.inter(q) > q.area * tol for q in (on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in parts))
+                return any(region.inter(q) > q.area * tol for q in (on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in cover_parts))
 
             if aspect >= 1.25:
                 region = Box(m, m, W * .5 - 1.5 * m, H - 2 * m) if cx_ >= .5 else Box(W * .5 + m * .5, m, W * .5 - 1.5 * m, H - 2 * m)
@@ -1328,23 +1419,40 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                     region = Box(m, H * (1 - band), W - 2 * m, H * band - m) if cy_ < .55 else Box(m, m, W - 2 * m, H * band - m)
                     if not covers(region):
                         break
-            if side or (c['kept'] < .8 or covers(region)) and (aspect >= 1.25 or aspect < .8):
+            fits_whole = abs((W / H) / img_aspect - 1) < .04       # the photo's own shape: full-bleed shows all of it
+            if whole and fits_whole:
+                c = {**c, 'kept': 1.0}
+            if side or (whole and not fits_whole) or (c['kept'] < .8 or covers(region)) and (aspect >= 1.25 or aspect < .8):
                 # the subject can't stay whole behind the copy: the photo becomes a panel sized to keep it,
                 # and the copy sits beside it on the page background (`side`: try that on a near-square canvas too)
                 wide = aspect >= 1.25 or side
+                if whole and not side:
+                    wide = img_aspect < aspect          # the side with more room for the photo's own shape
                 full = W if wide else H
                 best = None
                 lo = .08 if (wide and W / H > 3) else .22    # extreme banners: a face-shaped thumbnail is allowed
+                hi = .6
+                if fill == 'photo':
+                    lo, hi = max(lo, .28), .45               # the picture as a real part of the layout, not a sliver
                 for i in range(20):
-                    size = full * (lo + (.6 - lo) / 19 * i)   # lo ... 60% of the long side
+                    size = full * (lo + (hi - lo) / 19 * i)   # lo ... 60% of the long side
                     if full - size < full * .38:
                         break
                     slot = (size / H) if wide else (W / size)
                     kept = smart_crop(sub['box'], img_aspect, slot, sub.get('parts'))['kept']
-                    key = (round(kept / .03), -size)        # keep the most subject, then leave the copy the most room
+                    # keep the most subject, then leave the copy the most room ('photo': give the photo the most)
+                    key = (round(kept / .03), size if fill == 'photo' else -size)
                     if best is None or key > best[0]:
                         best = (key, size)
                 size = best[1]
+                if whole:
+                    # the designer wants all of the photo: its slot takes the photo's own shape (never cropped);
+                    # as big as leaves the copy at least ~38% of the page
+                    need = H * img_aspect if wide else W / img_aspect
+                    room = (W - 3 * m - max(W * .32, min(W * .6, 150.0))) if wide else H * .68   # copy keeps its minimum
+                    size = min(need, full * .62, room)
+                    if need <= min(full * .68, room):
+                        size = need          # a few pixels more photo beats thin blurred bars beside it
                 if wide:
                     right = cx_ >= .5
                     photo_box = Box(W - size, 0, size, H) if right else Box(0, 0, size, H)
@@ -1369,7 +1477,19 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                     if tall == 'blur':
                         backdrop = {'image': bg_img['id'], 'blur': .04, 'dim': .5}
                         reasons.append('The page behind it is the same photo, blurred and darkened, so the story has no empty space.')
-                _set(out, bg_img['id'], photo_box.list())
+                if whole:
+                    # fit the whole photo inside its slot; the rest of the slot shows the same photo blurred
+                    pw, ph = photo_box.w, photo_box.h
+                    fw, fh = (pw, pw / img_aspect) if pw / ph < img_aspect else (ph * img_aspect, ph)
+                    shown = Box(photo_box.x + (pw - fw) / 2, photo_box.y + (ph - fh) / 2, fw, fh)
+                    if fw < pw - 1 or fh < ph - 1:
+                        backdrop = {'image': bg_img['id'], 'blur': .04, 'dim': .5}
+                        reasons.append('All of the photo is shown, as asked; the space around it is the same photo, blurred.')
+                    else:
+                        reasons.append('All of the photo is shown, as asked.')
+                    _set(out, bg_img['id'], shown.list())
+                else:
+                    _set(out, bg_img['id'], photo_box.list())
                 overlay_panel = photo_box
             else:
                 copy_region = region
@@ -1377,7 +1497,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                     reasons.append('Copy placed on the ' + ('left' if cx_ >= .5 else 'right') + ' half, away from the photo subject.')
                 else:
                     reasons.append('Copy placed ' + ('below' if cy_ < .55 else 'above') + ' the photo subject.')
-                overlay_parts = [on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in parts]
+                overlay_parts = [on_canvas(pb, c['crop'], Box(0, 0, W, H)) for pb in cover_parts]
 
     # a photo that leaves no usable room for the copy goes (copy is the message)
     if photo_region is not None and hero and (copy_region.w < max(40.0, W * .2) or copy_region.h < max(14.0, H * .12)):
@@ -1495,6 +1615,8 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
         k = min(s * 2.0, max(s, math.sqrt(W * H / (g.width * g.height))))
     if frame_regions is not None:
         k = s * 1.8           # the message gets the whole space above the photo: start big, the fit loop shrinks it
+    if fill in ('type', 'photo') and not row:
+        k = min(s * 3.2, k * 1.6)
     if row:
         headi = next((it for it in items if it.role == 'headline'), None)
         if headi and headi.texts:
@@ -1597,6 +1719,15 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             if fit_all(k, gap) or k < s * .2:
                 break
             k *= .94
+    if fill == 'space' and not row and fit_all(k, gap):
+        # open the message up until it fills most of its area (never more than 3x the usual gap)
+        def fits_80(g_):
+            return all(fits(its, Box(reg.x, reg.y, reg.w, reg.h * .8), k, g_) for its, reg in columns())
+        g0 = gap
+        while gap < gap_base * 3 and fits_80(gap * 1.1):
+            gap *= 1.1
+        if gap > g0 * 1.2:
+            reasons.append('Space between the lines opened up so the message fills its area.')
     if dropped:
         reasons.append('Dropped to make room: ' + ', '.join(dict.fromkeys(dropped)) + '.')
     if k > s * 1.05:
@@ -1621,8 +1752,8 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
     if a['style']['structure'] == 'overlay' or any('bottom' in groups[it.id].get('anchors', [])
                                                   for it in items if it.role == 'headline' and it.id in groups):
         valign = 'bottom' if copy_region.cy > H / 2 else 'top'
-    if overlay_panel is not None and overlay_panel.h >= H - 1:
-        valign = 'center'          # copy beside a full-height photo panel: centred in its column, no dead half
+    if overlay_panel is not None:
+        valign = 'center'          # copy beside / under a photo panel: centred in its own area, no dead half
     if row:
         flow_row(allitems, copy_region, k, gap * 1.5, out)
     elif frame_regions is not None:
@@ -1684,6 +1815,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
         for pid in a['layers']['panels']:
             out[pid]['hidden'] = True        # the copy already sits on the page colour
     res = finish(design, g, a, out, W, H, reasons)
+    res['_args'] = {**args, 'fill': fill, 'tier': tier}
     if backdrop:
         res['design'].setdefault('page', {})['backdrop'] = backdrop
     has_cards = any(isinstance(it, RepeatItem) and not it.flex for it in items)

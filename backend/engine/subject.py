@@ -344,18 +344,42 @@ def box_from_map(grid, w, h):
 
 
 def find_subject(node) -> dict:
-    if node.subject is not None:
+    meta = node.meta or {}
+    focus, whole = meta.get('focus'), bool(meta.get('keepWhole'))
+    if node.subject is not None and not (focus or whole):
         return {'box': node.subject.list(), 'source': 'given', 'confidence': 1.0}
     if not node.src:
         return {'box': CENTRE, 'source': 'assumed', 'confidence': 0.0}
     key = hashlib.sha1(node.src.encode('utf-8', 'ignore')).hexdigest()
     if key in _cache:
-        return dict(_cache[key])
-    out = _detect(node.src)
-    if len(_cache) > 128:
-        _cache.pop(next(iter(_cache)))
-    _cache[key] = out
-    return dict(out)
+        out = dict(_cache[key])
+    else:
+        out = _detect(node.src)
+        if len(_cache) > 128:
+            _cache.pop(next(iter(_cache)))
+        _cache[key] = out
+        out = dict(out)
+    if not out.get('aspect'):
+        img = _open(node.src)
+        if img is not None:
+            out['aspect'] = round(img.size[0] / img.size[1], 4)
+    # the designer's intent overrides detection (detection still gave the photo's shape)
+    if whole and out.get('aspect'):
+        # what detection found is kept as `inner`: copy should still stay off it where the photo is shown whole
+        return {'box': [0.0, 0.0, 1.0, 1.0], 'source': 'whole', 'confidence': 1.0, 'aspect': out['aspect'],
+                'inner': out.get('parts') or [out['box']], 'inner_source': out.get('source')}
+    if focus and out.get('aspect') and isinstance(focus, (list, tuple)) and len(focus) == 4:
+        fx, fy, fw, fh = (max(0.0, min(1.0, float(v))) for v in focus)
+        fw, fh = max(.01, min(fw, 1 - fx)), max(.01, min(fh, 1 - fy))
+        res = {'box': [round(fx, 4), round(fy, 4), round(fw, 4), round(fh, 4)], 'source': 'focus', 'confidence': 1.0,
+               'aspect': out['aspect']}
+        if out.get('source') == 'faces':          # faces inside the marked area stay protected as faces
+            inside = [p for p in out.get('parts') or [] if p[0] >= fx - .02 and p[1] >= fy - .02
+                      and p[0] + p[2] <= fx + fw + .02 and p[1] + p[3] <= fy + fh + .02]
+            if inside:
+                res['faces_in_focus'] = True
+        return res
+    return out
 
 
 MODEL_PATH = __import__('pathlib').Path(__file__).resolve().parent / 'models' / 'u2netp.onnx'
