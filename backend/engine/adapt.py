@@ -916,6 +916,8 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
             reasons.append(f"Photo cropped around {what}; {c['kept'] * 100:.0f}% of {'them' if plural else 'it'} fits this shape.")
     _logos_off_subjects(out, a, W, H, reasons)
     nodes = [out[n['id']] for n in design['nodes']]
+    if not (abs(W - g.width) < .5 and abs(H - g.height) < .5 and a.get('_pinned_crop')):
+        _legible_on_photos(nodes, a, W, H, reasons)       # (a photo the designer framed keeps their colours)
     for n in nodes:      # photos are not repeated per size: the client re-attaches them by id
         if n.get('src'):
             n.pop('src')
@@ -1146,7 +1148,7 @@ def _tall_variants(res: dict, design: dict, g, a: dict, W: float, H: float, tier
         why = (f"Keeping the layout would show only {kk * 100:.0f}% of the photo's subject"
                if kk is not None and kk < .9 else "Keeping the layout would put the copy on the photo's subject")
         chosen['reasons'] = list(dict.fromkeys(chosen['reasons'] + [
-            f"{why}, so the layout was rebuilt ({best[2]['overall']:.0f} vs {first[2]['overall']:.0f})."]))
+            f"{why}, so the layout was rebuilt."]))
     return chosen
 
 
@@ -1860,23 +1862,130 @@ def ink(n: dict):
     return st.get('color', '#111') if n['type'] == 'text' else st.get('fill')
 
 
+import contextvars
+_PHOTOS = contextvars.ContextVar('chameleon_photos', default=None)   # node id -> photo src, for one adapt() call
+_PIX: dict = {}                                                      # decoded photos, small, by src
+
+
+def _photo_pixels(src):
+    if not src:
+        return None
+    key = hash(src)
+    if key not in _PIX:
+        from .subject import _open
+        _PIX[key] = _open(src)
+        if len(_PIX) > 32:
+            _PIX.pop(next(iter(_PIX)))
+    return _PIX[key]
+
+
+def _photo_colour(m: dict, box, busy: bool = False):
+    """Average colour of photo node m under `box` (canvas coordinates), through the crop it is drawn with.
+    None when the photo's pixels are not available (a placeholder, or a path the engine never reads)."""
+    src = m.get('src') or (_PHOTOS.get() or {}).get(m.get('srcFrom') or m['id'])
+    im = _photo_pixels(src)
+    if im is None:
+        return None
+    iw, ih = im.size
+    mx, my, mw, mh = m['box']
+    if mw <= 0 or mh <= 0:
+        return None
+    crop = m.get('crop')
+    if not crop:     # drawn as "cover": centred, filling the slot
+        a_img, a_slot = iw / ih, mw / mh
+        crop = [(1 - a_slot / a_img) / 2, 0, a_slot / a_img, 1] if a_img > a_slot else [0, (1 - a_img / a_slot) / 2, 1, a_img / a_slot]
+    cx, cy, cw, ch = crop
+    x0, y0 = max(box[0], mx), max(box[1], my)
+    x1, y1 = min(box[0] + box[2], mx + mw), min(box[1] + box[3], my + mh)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    u = lambda v: (cx + (v - mx) / mw * cw) * iw
+    v_ = lambda v: (cy + (v - my) / mh * ch) * ih
+    l, t, r, b = int(max(0, u(x0))), int(max(0, v_(y0))), int(min(iw, u(x1) + 1)), int(min(ih, v_(y1) + 1))
+    if r <= l or b <= t:
+        return None
+    from PIL import ImageStat
+    region = im.crop((l, t, r, b))
+    if busy:      # how much the photo varies there (luminance spread, 0-255): detail fights small text
+        return ImageStat.Stat(region.convert('L')).stddev[0]
+    mean = ImageStat.Stat(region).mean
+    return '#%02x%02x%02x' % tuple(int(round(c)) for c in mean[:3])
+
+
+def _blend(base: str, over: str, alpha: float) -> str:
+    a_, b_ = _rgb(base), _rgb(over)
+    if a_ is None or b_ is None:
+        return base
+    return '#%02x%02x%02x' % tuple(int(round(x * (1 - alpha) + y * alpha)) for x, y in zip(a_, b_))
+
+
 def backdrop(design: dict, n: dict):
-    """Colour behind the centre of node n: the topmost visible flat shape under it, else the page (None over a photo)."""
+    """Colour behind node n: the topmost visible flat shape under its centre, or the photo's own colour under
+    the whole box (with see-through shapes on top of it blended in), else the page. None over a photo whose
+    pixels are unknown."""
     x, y, w, h = n['box']
     cx, cy = x + w / 2, y + h / 2
     nodes = [m for m in design['nodes'] if m['type'] != 'group' and not m.get('hidden')]
     idx = next((i for i, m in enumerate(nodes) if m['id'] == n['id']), len(nodes))
+    veils = []        # translucent shapes between the text and what is under it
+    base = None
     for m in reversed(nodes[:idx]):
         if m['type'] not in ('shape', 'image'):
             continue
         bx, by, bw, bh = m['box']
         if bx <= cx <= bx + bw and by <= cy <= by + bh:
             if m['type'] == 'image':
-                return None
+                base = _photo_colour(m, n['box'])
+                if base is None:
+                    return None
+                break
             st = m.get('style') or {}
-            if float(st.get('opacity', 1) if st.get('opacity') is not None else 1) >= .5 and _rgb(st.get('fill')):
-                return st.get('fill')
-    return (design.get('page') or {}).get('background', '#ffffff')
+            op = float(st.get('opacity', 1) if st.get('opacity') is not None else 1)
+            if _rgb(st.get('fill')):
+                if op >= .5:
+                    base = st.get('fill')
+                    break
+                veils.append((st.get('fill'), op))
+    if base is None:
+        base = (design.get('page') or {}).get('background', '#ffffff')
+    for fill, op in reversed(veils):
+        base = _blend(base, fill, op)
+    return base
+
+
+def _legible_on_photos(nodes: list, a: dict, W: float, H: float, reasons: list):
+    """Text sitting straight on a photo (a logo, an eyebrow) that the photo there makes hard to read is set in
+    the design's light or dark ink instead, whichever reads better."""
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    d = {'page': {'width': W, 'height': H}, 'nodes': nodes}
+    by_id = {m['id']: m for m in nodes}
+    texts = [m for m in nodes if m['type'] == 'text' and not m.get('hidden') and (m.get('text') or '').strip()]
+    inks = [ink(m) for m in texts if _rgb(ink(m))]
+    lum = lambda c: sum(_rgb(c)) / 3
+    dark = min(inks + ['#111111'], key=lum)
+    dark = dark if lum(dark) < 90 else '#111111'
+    light = '#FFFFFF'
+    fixed = []
+    for m in texts:
+        if roles.get(m['id']) in ('decoration', 'panel'):
+            continue
+        cx, cy = m['box'][0] + m['box'][2] / 2, m['box'][1] + m['box'][3] / 2
+        under = next((q for q in reversed(nodes[:nodes.index(m)]) if q['type'] in ('image', 'shape') and not q.get('hidden')
+                      and q['box'][0] <= cx <= q['box'][0] + q['box'][2] and q['box'][1] <= cy <= q['box'][1] + q['box'][3]), None)
+        if under is None or under['type'] != 'image':
+            continue      # on a flat colour: the designer chose that pairing
+        bg = backdrop(d, m)
+        c = contrast(ink(m), bg)
+        spread = _photo_colour(under, m['box'], busy=True) or 0
+        need = 4.5 if spread > 40 else 3.0          # a busy patch of photo needs a stronger contrast
+        if c is None or c >= need:
+            continue
+        best = max((light, dark), key=lambda k: contrast(k, bg) or 0)
+        if (contrast(best, bg) or 0) >= max(need * .8, c * 1.3):
+            m['style'] = {**(m.get('style') or {}), 'color': best}
+            fixed.append((roles.get(m['id']) or 'text', 'light' if best == light else 'dark'))
+    for role, tone in dict.fromkeys(fixed):
+        reasons.append(f"{role[0].upper() + role[1:]} set in {tone} ink so it reads on the photo here.")
 
 
 def _contrasts(design: dict, a: dict) -> dict:
@@ -1957,6 +2066,7 @@ def baselines(g, a: dict, W: float, H: float) -> dict:
 def adapt(design: dict, targets: list[dict]) -> dict:
     g = load(design)
     src = g.to_json()                   # normalised: ids are strings, sizes are numbers, styles are clean
+    _PHOTOS.set({n['id']: n['src'] for n in src['nodes'] if n.get('src')})
     a = analyze(g)
     base = check(src, a, {})            # overlaps the designer made on purpose are allowed to stay
     base_overlaps = {tuple(sorted(p)) for p in base['overlaps']}

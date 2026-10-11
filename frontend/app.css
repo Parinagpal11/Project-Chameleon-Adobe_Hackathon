@@ -169,7 +169,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .ed-top { position: absolute; top: var(--gap); left: var(--gap); right: var(--gap); height: var(--top-h); display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 20; }
 .ed-left, .ed-right { pointer-events: auto; display: flex; align-items: center; gap: 4px; padding: 0 6px; height: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); position: relative; }
 .ed-left { width: var(--panel-w); }
-input.project-name { width: auto; flex: 1; min-width: 0; height: 30px; border-color: transparent; background: transparent; font-weight: 600; padding: 0 6px; }
+input.project-name { width: auto; flex: 1; min-width: 170px; height: 30px; border-color: transparent; background: transparent; font-weight: 600; padding: 0 6px; }
 input.project-name:hover { border-color: var(--line); }
 input.project-name:focus { border-color: var(--accent); background: var(--surface); }
 .save-state { color: var(--faint); padding-right: 4px; white-space: nowrap; }
@@ -440,3 +440,6 @@ body.is-busy .layout-status { opacity: 1; transition-delay: .25s; }
 @keyframes ls-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .layout-status i { animation: none; } }
 @media (max-width: 720px) { .layout-status { display: none; } }
+
+.rd-wait { font-size: 12px; color: var(--muted); }
+.issue.info { background: var(--surface-2); color: var(--muted); }

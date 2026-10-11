@@ -56,11 +56,11 @@ const slug = s => String(s || 'design').toLowerCase().replace(/[^a-z0-9]+/g, '-'
 const debounce = (fn, ms) => { let t; const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; d.cancel = () => clearTimeout(t); return d; };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 const roleOf = e => (e && e.genome && e.genome.role) || 'body';
-const niceRole = r => ({ cta: 'CTA', hero: 'Product image' }[r] || (r ? r[0].toUpperCase() + r.slice(1) : ''));
+const niceRole = r => ({ cta: 'CTA', hero: 'Photo' }[r] || (r ? r[0].toUpperCase() + r.slice(1) : ''));
 const lowerRole = r => (r === 'cta' ? 'CTA' : niceRole(r).toLowerCase());
 function elName(e) {
   if (!e) return '';
-  if (e.type === 'image') return roleOf(e) === 'background' ? 'Photo' : 'Product image';
+  if (e.type === 'image') return 'Photo';
   if (e.type === 'logo' && e.src) return 'Logo';
   const t = (e.text || '').trim();
   return t ? `${niceRole(roleOf(e))} · ${t.length > 22 ? t.slice(0, 21) + '…' : t}` : niceRole(roleOf(e));
@@ -80,7 +80,7 @@ function toast(msg, { action, onAction, error, strip, ms = 4200 } = {}) {
   if (action) t.append(el('button', { text: action, onclick: () => { onAction(); t.remove(); } }));
   $('toasts').append(t);
   setTimeout(() => t.remove(), ms);
-  while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
+  while ($('toasts').children.length > 2) $('toasts').firstChild.remove();
 }
 
 /* ───────── formats ───────── */
@@ -208,7 +208,9 @@ async function doRefresh() {
     const r = await api('/adapt', 'POST', { design: GV.resolved(S.design, S.assets), targets: formats.map(f => ({ width: f.width, height: f.height, name: f.key })) });
     if (seq !== S.seq) return;
     S.results = {}; r.results.forEach(x => { S.results[x.name] = asResult(x); });
+    const firstRoles = !Object.keys(S.roleMap).length;
     S.roleMap = r.roles || {}; S.rules = []; S.roles = [...new Set(Object.values(S.roleMap))];
+    if (firstRoles) App.paintAssets?.();
     App.paint('all');
   } catch (e) { toast(e.message, { error: true }); }
   finally { if (seq === S.seq) busy(false); }
@@ -248,9 +250,18 @@ function issuesOf(key, cand) {
   for (const id of ch.off_canvas || []) add('OUT_OF_BOUNDS', `${name(id)} is outside the frame`, owner[id] || id);
   for (const id of ch.small_text || []) add('TEXT_TOO_SMALL', `${name(id)} is under 12px`, owner[id] || id);
   for (const id of ch.low_contrast || []) add('LOW_CONTRAST', `${name(id)} is hard to read on its background`, owner[id] || id);
-  if (!cand) {   // a frame-only tweak can push something off the frame
-    const W = d.canvas.width, H = d.canvas.height;
+  if (!cand) {   // a frame-only tweak can push something off the frame, or onto another element
+    const W = d.canvas.width, H = d.canvas.height, ov = S.overrides[key] || {};
     for (const e of d.elements) if (!e.hidden && e.type !== 'decoration' && (e.x < -1 || e.y < -1 || e.x + e.width > W + 1 || e.y + e.height > H + 1)) add('OUT_OF_BOUNDS', `${elName(e)} is outside the frame`, e.id);
+    const solid = d.elements.filter(e => !e.hidden && e.width > 0 && ['text', 'button', 'logo'].includes(e.type));
+    for (const e of solid) {
+      if (!ov[e.id]) continue;               // only what the designer moved; the engine's own result is checked above
+      for (const f of solid) {
+        if (f === e) continue;
+        const ix = Math.min(e.x + e.width, f.x + f.width) - Math.max(e.x, f.x), iy = Math.min(e.y + e.height, f.y + f.height) - Math.max(e.y, f.y);
+        if (ix > 2 && iy > 2 && ix * iy > Math.min(e.width * e.height, f.width * f.height) * .08) add('OVERLAP', `${elName(e)} overlaps ${elName(f)}`, e.id);
+      }
+    }
   }
   return out;
 }
@@ -497,12 +508,13 @@ async function useImage(info, kind, { quiet } = {}) {
     // a new photo: let the engine find its subject and frame it at every size
     delete target.crop; delete target.subject;
     target.meta = { ...(target.meta || {}), label: 'your photo' }; delete target.meta.focus; delete target.meta.art;
+    S.choices = {};       // layouts picked for the old photo may not suit this one
   }
   target.src = 'asset:' + id;
-  recordDesignChange(kind === 'hero' ? 'product image' : 'logo', before);
+  recordDesignChange(kind === 'hero' ? 'photo' : 'logo', before);
   App.paintAssets?.(); refresh(); save();
-  if (!quiet) toast(kind === 'hero' ? 'Product image applied to every frame' : 'Logo applied to every frame',
-    { action: kind === 'hero' ? 'Use as logo' : 'Use as product image', onAction: async () => { await undo(); useImage(info, kind === 'hero' ? 'logo' : 'hero'); } });
+  if (!quiet) toast(kind === 'hero' ? 'Photo applied to every size' : 'Logo applied to every size',
+    { action: kind === 'hero' ? 'Use as logo' : 'Use as photo', onAction: async () => { await undo(); useImage(info, kind === 'hero' ? 'logo' : 'hero'); } });
 }
 async function useUpload(file, kind) {
   try { const info = await readImage(file, kind); await useImage(info, kind || classify(info, file)); }

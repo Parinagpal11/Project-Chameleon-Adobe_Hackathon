@@ -294,13 +294,16 @@
     drawFrame(key); positionOverlay();
     clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (S.edit && !S.pending) inferEdit(); }, 650);
   }
+  /** Tab / Shift+Tab move through a frame's elements; past the last (or first) one, focus leaves the canvas. */
   function cycle(dir) {
-    const key = S.sel?.key || activeFormats()[0]?.key; if (!key) return;
+    const key = S.sel?.key || activeFormats()[0]?.key; if (!key) return false;
     const els = curDesign(key).elements.filter(e => !e.hidden && e.width > 0 && e.type !== 'decoration');
-    if (!els.length) return;
+    if (!els.length) return false;
     const i = S.sel?.id ? els.findIndex(e => e.id === S.sel.id) : -1;
-    const next = els[(i + dir + els.length) % els.length];
-    select({ key, id: next.id });
+    const j = i + dir;
+    if (i >= 0 && (j < 0 || j >= els.length)) { select({ key, id: null }); return false; }
+    select({ key, id: els[(j + els.length) % els.length].id });
+    return true;
   }
   document.addEventListener('keydown', e => {
     if (S.view !== 'editor') return;
@@ -326,7 +329,7 @@
       if (S.sel?.id) select({ key: S.sel.key, id: null }); else if (S.sel) select(null);
       return;
     }
-    if (e.key === 'Tab' && document.activeElement === VP) { e.preventDefault(); cycle(e.shiftKey ? -1 : 1); return; }
+    if (e.key === 'Tab' && document.activeElement === VP) { if (cycle(e.shiftKey ? -1 : 1)) e.preventDefault(); return; }
     if (e.key === 'Enter' && S.sel && !S.sel.id && document.activeElement === VP) { e.preventDefault(); cycle(1); return; }
     if (!S.sel?.id) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {

@@ -17,8 +17,8 @@
     if (S.view !== 'editor') return null;
     const h = App.hitTest?.(e.clientX, e.clientY);
     if (!h || !h.el) return null;
-    if (h.el.type === 'image') return { kind: 'hero', box: App.elBoxClient(h.key, h.id), text: 'Replace product image in every frame' };
-    if (h.el.type === 'logo') return { kind: 'logo', box: App.elBoxClient(h.key, h.id), text: 'Replace logo in every frame' };
+    if (h.el.type === 'image') return { kind: 'hero', box: App.elBoxClient(h.key, h.id), text: 'Replace the photo in every size' };
+    if (h.el.type === 'logo') return { kind: 'logo', box: App.elBoxClient(h.key, h.id), text: 'Replace the logo in every size' };
     return null;
   }
   window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; overlay.hidden = false; });
@@ -58,7 +58,7 @@
       store.set('chameleon.tour.v3', store.get('chameleon.tour.v3') || 'deferred');
     }
     for (const x of infos) await useImage(x.info, x.kind, { quiet: infos.length > 1 });
-    if (infos.length > 1) toast('Logo and product image applied to every frame', { action: 'Swap them', onAction: async () => { await undo(); await undo(); for (const x of infos) await useImage(x.info, x.kind === 'logo' ? 'hero' : 'logo', { quiet: true }); } });
+    if (infos.length > 1) toast('Logo and photo applied to every size', { action: 'Swap them', onAction: async () => { await undo(); await undo(); for (const x of infos) await useImage(x.info, x.kind === 'logo' ? 'hero' : 'logo', { quiet: true }); } });
   }
   App.handleFiles = handleFiles;
 

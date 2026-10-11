@@ -55,7 +55,7 @@
         <span><b>Open a design file</b><small>Chameleon JSON (design or project)</small></span>
       </label>
       <div class="demo-tile" aria-label="Example: one design laid out for four sizes">
-        <div class="demo-stage resize-demo" id="home-demo"></div>
+        <div class="demo-stage resize-demo" id="home-demo"><span class="rd-wait">Laying out the sample…</span></div>
         <div class="demo-cap"><b>Rearranged for every size</b><button class="link" id="home-demo-tour">See how →</button></div>
       </div>
     </section>
@@ -137,14 +137,14 @@
     <section id="pane-assets" role="tabpanel" aria-labelledby="tab-assets" class="pane" hidden>
       <div class="group"><span class="label">Images</span>
         <div class="asset-drops">
-          <label class="asset-drop" id="drop-hero" data-kind="hero" tabindex="0"><input type="file" accept="image/*" id="up-hero" class="visually-hidden"><span class="thumb" id="thumb-hero"></span><span><b>Product image</b><small>Drop or click</small></span><button type="button" class="icon-btn sm rm" id="rm-hero" aria-label="Remove product image" hidden><svg class="i"><use href="#i-x"/></svg></button></label>
+          <label class="asset-drop" id="drop-hero" data-kind="hero" tabindex="0"><input type="file" accept="image/*" id="up-hero" class="visually-hidden"><span class="thumb" id="thumb-hero"></span><span><b>Photo</b><small>Drop or click</small></span><button type="button" class="icon-btn sm rm" id="rm-hero" aria-label="Remove photo" hidden><svg class="i"><use href="#i-x"/></svg></button></label>
           <label class="asset-drop" id="drop-logo" data-kind="logo" tabindex="0"><input type="file" accept="image/*" id="up-logo" class="visually-hidden"><span class="thumb" id="thumb-logo"></span><span><b>Logo</b><small>PNG with transparency</small></span><button type="button" class="icon-btn sm rm" id="rm-logo" aria-label="Remove logo" hidden><svg class="i"><use href="#i-x"/></svg></button></label>
         </div>
       </div>
       <div class="group"><span class="label">Colors</span><div class="swatches" id="swatches"></div></div>
       <div class="group"><span class="label">Typeface</span>
         <select id="brand-font" aria-label="Typeface"><option>Inter</option><option>Poppins</option><option>Montserrat</option><option>Space Grotesk</option><option>Playfair Display</option><option>DM Serif Display</option></select></div>
-      <div class="group"><span class="label">Copy</span><div id="copy-fields" class="fields"></div><p class="hint">Copy changes apply to every frame.</p></div>
+      <div class="group"><span class="label">Copy</span><div id="copy-fields" class="fields"></div><p class="hint">Text changes apply to every size.</p></div>
     </section>
   </aside>
 
@@ -207,7 +207,7 @@
 </div>
 
 <!-- ═════════════════════════ OVERLAYS ═════════════════════════ -->
-<div id="drop-overlay" class="drop-overlay" hidden><div><svg class="i xl"><use href="#i-upload"/></svg><b>Drop to add to your campaign</b><span>Photos become the product image, transparent or wide images become the logo. Drop on an element to replace it.</span></div></div>
+<div id="drop-overlay" class="drop-overlay" hidden><div><svg class="i xl"><use href="#i-upload"/></svg><b>Drop to add to your campaign</b><span>Photos replace the photo, transparent or wide images become the logo. Drop on the photo or logo to replace just that one.</span></div></div>
 <div id="drag-ghost" class="drag-ghost" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 

@@ -100,7 +100,7 @@
     const input = el(long ? 'textarea' : 'input', { maxlength: 200, rows: long ? 2 : null, 'aria-label': `${niceRole(role)} copy`,
       onfocus: () => { before = snapshot(); },
       oninput: ev => { n.text = ev.target.value; refresh(); },
-      onchange: () => { if (before) recordDesignChange(`${lowerRole(role)} copy`, before); before = null; save(); App.paintAssets(); } });
+      onchange: () => { if (before) recordDesignChange(`${lowerRole(role)} copy`, before); before = null; save(); } });
     input.value = n.text || '';
     return compact ? input : el('label', {}, `${niceRole(role)}${role === 'logo' ? ' (text logo)' : ''}`, input);
   }
@@ -159,6 +159,7 @@
       el('div', { class: 'insp-head' }, el('span', { class: 'role-chip' }, ic('frame')), el('div', {}, el('b', { text: f.name }), el('small', { text: `${f.width} × ${f.height} px · ${f.group}` }))),
       whyGroup(key),
       framingGroup(),
+      droppedNote(key),
       group(res?.candidates?.length > 1 ? 'Layouts tried' : 'Layout', el('div', { class: 'layouts', role: 'radiogroup', 'aria-label': 'Layout options' }, (res?.candidates || []).map(c => {
         const on = c === chosen(key), cv = el('canvas', { 'aria-hidden': 'true' });
         GV.draw(cv, displayOf(c), { scale: Math.min(76 / f.width, 52 / f.height), dpr: DPR });
@@ -214,6 +215,17 @@
     ];
   }
 
+  /* secondary text the engine left out at this size (allowed on small sizes, but the designer should know) */
+  function droppedNote(key) {
+    const c = chosen(key); if (!c) return null;
+    const owner = {}; for (const n of c.design.nodes) if (n.type === 'group') for (const k of n.children || []) owner[k] = n.id;
+    const ids = [...new Set((c.checks.dropped || []).map(id => owner[id] || id))];
+    const names = ids.map(id => niceRole(S.roleMap[id] || 'text')).filter(Boolean);
+    if (!names.length) return null;
+    return group('Left out at this size', el('div', { class: 'issue info' }, ic('eyeOff'),
+      el('span', { text: `${[...new Set(names)].join(', ')} didn’t fit and is hidden here. Show it from Layers if this size needs it.` })));
+  }
+
   /* why a size looks the way it does, in the engine's own words (minus its internal tier label) */
   function whyGroup(key) {
     const c = chosen(key); if (!c) return null;
@@ -233,6 +245,7 @@
       if (m === 'whole') mt.keepWhole = true;
       if (m === 'focus') mt.focus = focus.map(v => Math.round(v * 1e4) / 1e4);
       p.meta = mt; framingMode = null;
+      S.choices = {};     // a layout picked by hand may not respect the new framing: let the engine choose again
       recordDesignChange(m === 'auto' ? 'photo framing: auto' : m === 'whole' ? 'keep whole photo' : 'focus area', before);
       refresh(true); save();
     };
