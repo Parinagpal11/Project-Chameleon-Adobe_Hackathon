@@ -528,3 +528,13 @@ body.is-busy .layout-status { opacity: 1; transition-delay: .25s; }
   -webkit-mask-image: linear-gradient(100deg, transparent 46%, #000 70%); mask-image: linear-gradient(100deg, transparent 46%, #000 70%); }
 :root[data-theme="light"] .home { background: radial-gradient(1200px 600px at 85% -10%, rgba(113,82,240,.10), transparent 60%), radial-gradient(900px 500px at -10% 30%, rgba(236,72,153,.06), transparent 60%), var(--bg); }
 :root[data-theme="light"] .hero-demo { background: #fff; }
+
+/* Glass, used only on surfaces that float over the animated background (hero demo, top bar) and the tour card.
+   Content cards and editor panels stay solid so text stays readable. */
+:root { --glass-fill: color-mix(in srgb, var(--surface) 62%, transparent); --glass-edge: rgba(255,255,255,.14); --glass-hi: rgba(255,255,255,.10); --glass-blur: blur(22px) saturate(1.5); }
+:root[data-theme="light"] { --glass-fill: rgba(255,255,255,.58); --glass-edge: rgba(255,255,255,.85); --glass-hi: rgba(255,255,255,.9); }
+.hero-demo, :root[data-theme="light"] .hero-demo { background: var(--glass-fill); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow); }
+.home-top { background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .hero-demo, :root[data-theme="light"] .hero-demo { background: var(--surface); } .home-top { background: var(--bg); } }
+@media (prefers-reduced-transparency: reduce) { .hero-demo, :root[data-theme="light"] .hero-demo { background: var(--surface); backdrop-filter: none; } .home-top { background: var(--bg); backdrop-filter: none; } }
