@@ -1049,6 +1049,14 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
             c['reasons'] = list(dict.fromkeys([head] + c['reasons']))
         if len(cands) > 1:
             res, _, _ = _best_of(cands, design, a)
+    elif tier == 2 and W / H >= 1.25 and a['style']['structure'] == 'overlay' and a['subjects'] and not res.get('alternatives'):
+        # a wide canvas: try both the photo full-bleed with the copy over its quiet side, and the photo as a panel
+        panel = any('side panel' in r for r in res['reasons'])
+        alt = reflow_one(design, g, a, W, H, tier, keep_bleed=True) if panel else reflow_one(design, g, a, W, H, tier, side=True)
+        if panel != any('side panel' in r for r in alt['reasons']):
+            alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
+            first = 'Photo beside the copy' if panel else 'Copy over the photo'
+            res, _, _ = _best_of([(first, res), ('Copy over the photo' if panel else 'Photo beside the copy', alt)], design, a)
     res = _fill_variants(res, design, g, a, W, H, head)
     for alt in res.get('alternatives', []):
         alt['reasons'] = list(dict.fromkeys([head] + alt['reasons']))
@@ -1200,14 +1208,14 @@ def _pick_layout(res: dict, design: dict, g, a: dict, W: float, H: float, tier: 
 
 
 def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=None, cards_beside=None, tall=None,
-               side=False, logo_by_cta=False, fill=None) -> dict:
+               side=False, logo_by_cta=False, fill=None, keep_bleed=False) -> dict:
     """`orient` ('beside'/'above') and `cards_beside` force a layout family; None lets the rules choose.
     `tall` ('frame' / 'blur') changes how a full-bleed photo that must become a panel sits on a tall canvas:
     'frame' puts the photo in the middle with the message above and the button below; 'blur' keeps the panel
     and fills the page behind it with a blurred, darkened copy of the same photo.
     `fill` ('type' / 'space') is for canvases where the copy leaves dead space: 'type' starts the type bigger
     (the fit loop still shrinks it to fit), 'space' opens up the gaps between the lines of the message."""
-    args = dict(orient=orient, cards_beside=cards_beside, tall=tall, side=side, logo_by_cta=logo_by_cta)
+    args = dict(orient=orient, cards_beside=cards_beside, tall=tall, side=side, logo_by_cta=logo_by_cta, keep_bleed=keep_bleed)
     s = min(W / g.width, H / g.height)
     reasons: list[str] = []
     out = _fresh(design)
@@ -1424,7 +1432,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             fits_whole = abs((W / H) / img_aspect - 1) < .04       # the photo's own shape: full-bleed shows all of it
             if whole and fits_whole:
                 c = {**c, 'kept': 1.0}
-            if side or (whole and not fits_whole) or (c['kept'] < .8 or covers(region)) and (aspect >= 1.25 or aspect < .8):
+            if not (keep_bleed and not whole) and (side or (whole and not fits_whole) or (c['kept'] < .8 or covers(region)) and (aspect >= 1.25 or aspect < .8)):
                 # the subject can't stay whole behind the copy: the photo becomes a panel sized to keep it,
                 # and the copy sits beside it on the page background (`side`: try that on a near-square canvas too)
                 wide = aspect >= 1.25 or side

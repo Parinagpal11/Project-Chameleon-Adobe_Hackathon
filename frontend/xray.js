@@ -621,7 +621,8 @@
       const m = location.hash.match(/d=([\w-]+)/);
       let fromStudio = null;
       if (/from=studio/.test(location.hash)) { try { fromStudio = JSON.parse(localStorage.getItem('chameleon.xray.design') || 'null'); } catch { /* none */ } }
-      if (fromStudio && Array.isArray(fromStudio.nodes)) {        // opened from the Studio's "How it thinks" button
+      if (fromStudio) $('xr-back').href = '/how#from=studio';
+      if (fromStudio && Array.isArray(fromStudio.nodes)) {        // opened from the Studio (via How it works)
         const opt = el('option', { value: 'import:studio', text: 'From the Studio · ' + (fromStudio.name || 'your design') });
         $('xr-design').prepend(opt); $('xr-design').value = opt.value;
         show(fromStudio);

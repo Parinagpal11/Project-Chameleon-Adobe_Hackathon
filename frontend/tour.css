@@ -190,3 +190,15 @@
 .st-xray .xl { position: absolute; left: 66%; top: 44%; font-size: 9px; font-weight: 600; color: var(--muted); width: 30%; }
 @keyframes xbIn { 0% { opacity: 0; transform: scale(1.08); } 10%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 .tour-stage.still .st-frame .fbox, .tour-stage.still .st-xray .xb { animation: none; opacity: 1; transform: none; }
+
+/* guided tour (v4): a compact card beside the real thing it points at */
+.tour { width: 340px; border-radius: 16px; }
+.tour-body { padding: 16px 18px 14px; }
+.tour h2 { font-family: var(--display); font-size: 18px; letter-spacing: -.01em; margin: 4px 0 8px; }
+.tour p { font-size: 13px; color: var(--muted); }
+.tour .tour-meta .label { color: var(--accent); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; }
+.tour.working .tour-body { opacity: .7; }
+.tour.working #tour-next { cursor: progress; }
+.tour-spot { border-radius: 12px; box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 0 9999px rgba(10,8,25,.30); }
+@media (prefers-reduced-motion: no-preference) { .tour-spot { animation: spotPulse 1.8s ease-in-out infinite; } }
+@keyframes spotPulse { 50% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 10px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 0 9999px rgba(10,8,25,.30); } }

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How Chameleon works</title>
+<script>
+  (function () { var t = null; try { t = localStorage.getItem('chameleon.theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t; })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Playfair+Display:wght@700;800&family=Montserrat:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/how.css">
+</head>
+<body class="how">
+<a class="skip" href="#how-main">Skip to the steps</a>
+<header class="how-top">
+  <a class="btn ghost" id="how-back" href="/"><svg class="i" aria-hidden="true"><use href="#i-chevronLeft"/></svg><span id="how-back-label">Back to Chameleon</span></a>
+  <a class="brand" href="/" aria-label="Chameleon home"><span class="brand-mark" aria-hidden="true"></span><span>chameleon</span></a>
+  <div class="how-top-r">
+    <a class="btn ghost" id="engine-link" href="/xray" title="The full technical view: detection, groups, tiers and scores"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>Engine room</span></a>
+    <button class="icon-btn" id="how-theme" aria-label="Switch theme" title="Switch theme"></button>
+  </div>
+</header>
+
+<main id="how-main" class="how-main">
+  <section class="how-hero">
+    <span class="eyebrow"><i class="dot" aria-hidden="true"></i>How it works</span>
+    <h1>From one design to every size, in four steps.</h1>
+    <p class="lede">This page runs the engine on a real design and shows what it does at each step. Nothing here is a mock-up.</p>
+    <label class="how-pick"><span>Design</span><select id="how-design" aria-label="Design to explain"></select></label>
+  </section>
+
+  <ol class="steps">
+    <li class="step" id="step-read">
+      <div class="step-n" aria-hidden="true">1</div>
+      <div class="step-body">
+        <h2>It reads your design</h2>
+        <p class="step-lede">Chameleon works out what each element is (headline, button, logo, photo) and finds what matters in the photo: faces, people or the main product.</p>
+        <div class="step-grid read-grid"><div class="read-art" id="read-art"></div><div class="read-side"><figure class="read-photo" id="read-photo" hidden><figcaption>What it found in the photo</figcaption></figure><ul class="facts" id="read-facts"></ul></div></div>
+      </div>
+    </li>
+    <li class="step" id="step-plan">
+      <div class="step-n" aria-hidden="true">2</div>
+      <div class="step-body">
+        <h2>It decides how much each size has to change</h2>
+        <p class="step-lede">A size close to your original keeps your layout. A new orientation re-flows it. An extreme shape, like a banner, gets rebuilt.</p>
+        <div class="plan-row" id="plan-row"></div>
+      </div>
+    </li>
+    <li class="step" id="step-try">
+      <div class="step-n" aria-hidden="true">3</div>
+      <div class="step-body">
+        <h2>It tries several layouts and keeps the best one</h2>
+        <p class="step-lede">For each size it builds alternatives (photo beside or above the copy, bigger type, a framed photo…), scores every one and explains its pick.</p>
+        <div class="size-tabs" role="tablist" aria-label="Size" id="try-tabs"></div>
+        <div class="try-grid"><div class="try-opts" id="try-opts"></div><div class="try-why"><h3>Why this one</h3><ul class="facts" id="try-why"></ul></div></div>
+      </div>
+    </li>
+    <li class="step" id="step-check">
+      <div class="step-n" aria-hidden="true">4</div>
+      <div class="step-body">
+        <h2>It checks every size and proves it beats a plain resize</h2>
+        <p class="step-lede">Each result is checked for overlaps, edges, text size and contrast, then scored against what stretching or centre-cropping would give.</p>
+        <div class="score-table" id="score-table"></div>
+      </div>
+    </li>
+  </ol>
+
+  <section class="control">
+    <h2>You stay in control</h2>
+    <div class="control-grid">
+      <div class="ctl"><b>Focus area</b><span>Draw a box on the photo. Every size keeps it in view.</span></div>
+      <div class="ctl"><b>Whole photo</b><span>Never crop it. The space around it is filled, not left blank.</span></div>
+      <div class="ctl"><b>Layouts tried</b><span>Prefer another option? One click swaps it in.</span></div>
+      <div class="ctl"><b>Adjust by hand</b><span>Drag anything in one size. The others keep their own layout.</span></div>
+    </div>
+    <div class="control-cta"><a class="btn primary lg" href="/" id="how-open"><span>Open Chameleon</span></a>
+      <a class="btn lg" href="/xray" id="engine-link-2"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>See the engine room</span></a></div>
+    <p class="small muted">The engine room shows the raw detection, groups, tiers and scores for every size: the technical view behind this page.</p>
+  </section>
+</main>
+<div class="xr-error toast err" id="how-error" role="alert" hidden></div>
+<script src="/assets/icons.js"></script>
+<script src="/assets/graph-render.js"></script>
+<script src="/assets/studio-graph.js"></script>
+<script src="/assets/how.js"></script>
+</body>
+</html>

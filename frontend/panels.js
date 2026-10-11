@@ -162,11 +162,11 @@
       droppedNote(key),
       group(res?.candidates?.length > 1 ? 'Layouts tried' : 'Layout', el('div', { class: 'layouts', role: 'radiogroup', 'aria-label': 'Layout options' }, (res?.candidates || []).map(c => {
         const on = c === chosen(key), cv = el('canvas', { 'aria-hidden': 'true' });
-        GV.draw(cv, displayOf(c), { scale: Math.min(76 / f.width, 52 / f.height), dpr: DPR });
+        GV.draw(cv, displayOf(c), { scale: Math.min(118 / f.width, 84 / f.height), dpr: DPR });
         const n = issuesOf(key, c).length;
         return el('button', { class: 'layout-opt', role: 'radio', 'aria-checked': on, 'aria-label': `${STRATEGY[c.strategy] || c.strategy}${n ? `, ${n} warnings` : ''}`, onclick: () => {
           if (on) return; const before = snapshot(); S.choices[key] = c.strategy; recordDesignChange('layout choice', before); App.paint('all'); save();
-        } }, cv, el('span', { text: STRATEGY[c.strategy] || c.strategy }), n ? el('span', { class: 'warnmark', text: `${n} warning${n > 1 ? 's' : ''}` }) : el('span', { class: 'okmark', text: '✓ No issues' }));
+        } }, cv, el('span', { text: STRATEGY[c.strategy] || c.strategy }), n ? el('span', { class: 'warnmark', text: `${n} warning${n > 1 ? 's' : ''}` }) : el('span', { class: 'okmark', text: `✓ Score ${Math.round(c.score.overall || 0)}` }));
       }))),
       group('Checks', issues.length
         ? el('ul', { class: 'issue-list' }, issues.map(i => el('li', { class: 'issue' }, ic('alert'), el('span', { text: i.text }), i.id ? el('button', { class: 'btn ghost sm', text: 'Select', onclick: () => App.select({ key, id: i.id }) }) : null)))

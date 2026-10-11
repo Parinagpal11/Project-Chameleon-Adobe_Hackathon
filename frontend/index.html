@@ -12,7 +12,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@500;600;700;800&family=DM+Serif+Display&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@500;600;700;800&family=DM+Serif+Display&display=swap">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/tour.css">
 </head>
@@ -26,42 +26,46 @@
     <a class="brand" href="/" aria-label="Chameleon home"><span class="brand-mark" aria-hidden="true"></span><span>chameleon</span></a>
     <div class="home-top-actions">
       <button class="btn ghost sm" id="silk-toggle" type="button" aria-pressed="true" title="Pause or play the background animation">Pause motion</button>
-      <a class="btn ghost xray-link" href="/xray" title="See what the engine understands about a design" aria-label="How Chameleon thinks"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>How it thinks</span></a>
+      <a class="btn ghost" href="/how" title="See how Chameleon lays out a design, step by step"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>How it works</span></a>
       <button class="btn ghost tour-link" id="home-tour" aria-label="Product tour"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>Product tour</span></button>
       <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
     </div>
   </header>
   <main class="home-main">
-    <section class="home-intro">
-      <div>
-        <h1>One design. Every size. Laid out, not cropped.</h1>
-        <p class="muted">Chameleon rebuilds your design for each format. It keeps the people and products in your photo in view, keeps text off faces, and picks the layout that fits. Adjust any size by hand.</p>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <span class="eyebrow"><i class="dot" aria-hidden="true"></i>Resize that re-designs</span>
+        <h1 id="hero-title">One design.<br> Every size.<br> <span class="hl">Laid out, not cropped.</span></h1>
+        <p class="lede">Chameleon rebuilds your design for every format. It finds the people and products in your photo, keeps text off faces, tries several layouts for each size and tells you why it picked one.</p>
+        <div class="hero-cta">
+          <button class="btn primary lg" id="new-sample"><svg class="i"><use href="#i-play"/></svg><span>Try it on a sample</span></button>
+          <label class="btn lg drop-tile" id="home-drop" tabindex="0">
+            <input type="file" id="home-files" accept="image/*,.json,application/json" multiple class="visually-hidden" tabindex="-1">
+            <svg class="i"><use href="#i-upload"/></svg><span>Use your photo &amp; logo</span>
+          </label>
+        </div>
+        <p class="hero-sub small muted">Or <label class="link" id="home-import" tabindex="0"><input type="file" id="home-json" accept="application/json,.json" class="visually-hidden" tabindex="-1">open a design file</label> · <button class="link" id="home-demo-tour">take the 1-minute tour</button></p>
       </div>
+      <figure class="hero-demo" aria-label="Live example: one design laid out for several sizes by Chameleon">
+        <div class="demo-stage resize-demo" id="home-demo"><span class="rd-wait">Laying out the sample…</span></div>
+        <figcaption class="demo-why" id="home-demo-why" aria-live="polite"></figcaption>
+      </figure>
     </section>
 
-    <section class="new-row" aria-label="Start a campaign">
-      <button class="new-tile" id="new-sample">
-        <span class="tile-icon"><svg class="i"><use href="#i-plus"/></svg></span>
-        <span><b>Try a sample</b><small>Snow cabins ad, 6 sizes</small></span>
-      </button>
-      <label class="new-tile drop-tile" id="home-drop" tabindex="0">
-        <input type="file" id="home-files" accept="image/*,.json,application/json" multiple class="visually-hidden">
-        <span class="tile-icon accent"><svg class="i"><use href="#i-upload"/></svg></span>
-        <span><b>Drop your photo &amp; logo</b><small>They go into a sample design · or click to browse</small></span>
-      </label>
-      <label class="new-tile" id="home-import">
-        <input type="file" id="home-json" accept="application/json,.json" class="visually-hidden">
-        <span class="tile-icon"><svg class="i"><use href="#i-file"/></svg></span>
-        <span><b>Open a design file</b><small>Chameleon JSON (design or project)</small></span>
-      </label>
-      <div class="demo-tile" aria-label="Example: one design laid out for four sizes">
-        <div class="demo-stage resize-demo" id="home-demo"><span class="rd-wait">Laying out the sample…</span></div>
-        <div class="demo-cap"><b>Rearranged for every size</b><button class="link" id="home-demo-tour">See how →</button></div>
+    <section class="diff" aria-labelledby="diff-title">
+      <div class="sec-head"><h2 id="diff-title">What makes Chameleon different</h2><span class="muted small">Every example below is the engine running live on the sample.</span></div>
+      <div class="diff-grid" id="diff-grid">
+        <article class="diff-card wide" data-k="rebuild"><div class="dc-vis"></div><div class="dc-text"><h3>It rebuilds the layout</h3><p>Most resizers stretch, crop or let you fix each size by hand. Chameleon moves and re-sizes every element for the new shape, then checks the result.</p></div></article>
+        <article class="diff-card" data-k="sees"><div class="dc-vis"></div><div class="dc-text"><h3>It knows what’s in your photo</h3><p>Faces, people and products are found automatically, kept in view at every size, and text is moved off them.</p></div></article>
+        <article class="diff-card" data-k="why"><div class="dc-vis"></div><div class="dc-text"><h3>It tells you why</h3><p>Every size explains its choices in plain words, so you can trust it or change it.</p></div></article>
+        <article class="diff-card" data-k="tried"><div class="dc-vis"></div><div class="dc-text"><h3>It shows what it tried</h3><p>Each size comes with the other layouts Chameleon scored. One click swaps them in.</p></div></article>
+        <article class="diff-card" data-k="intent"><div class="dc-vis"></div><div class="dc-text"><h3>You decide what matters</h3><p>Mark a focus area or keep the whole photo, and every size follows.</p></div></article>
+        <article class="diff-card full" data-k="checks"><div class="dc-vis"></div><div class="dc-text"><h3>Every size is checked</h3><p>No overlaps, nothing off the edge, no text under 12 px, readable contrast, all scored.</p></div></article>
       </div>
     </section>
 
     <section aria-labelledby="tpl-title">
-      <div class="sec-head"><h2 id="tpl-title">Templates</h2></div>
+      <div class="sec-head"><h2 id="tpl-title">Start from a template</h2></div>
       <div class="cards" id="templates"></div>
     </section>
 
@@ -69,6 +73,8 @@
       <div class="sec-head"><h2 id="recent-title">Recent campaigns</h2><span class="muted small" id="recent-count"></span></div>
       <div class="cards" id="recents"></div>
     </section>
+
+    <footer class="home-foot small muted">Chameleon · Adobe University Hackathon 2026 · Pari Nagpal, Priyanshu, Anwar</footer>
   </main>
 </div>
 
@@ -109,7 +115,7 @@
       <button class="icon-btn" id="redo" aria-label="Redo" title="Redo (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
       <span class="sep" aria-hidden="true"></span>
       <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
-      <button class="btn ghost" id="think-btn" title="See what Chameleon understands about this design (opens in a new tab)"><svg class="i"><use href="#i-target"/></svg><span class="hide-sm">How it thinks</span></button>
+      <button class="btn ghost" id="think-btn" title="See how Chameleon laid out this design, step by step"><svg class="i"><use href="#i-target"/></svg><span class="hide-sm">How it works</span></button>
       <button class="btn ghost" id="tour-btn" title="Product tour"><svg class="i"><use href="#i-help"/></svg><span class="hide-sm">Tour</span></button>
       <div class="split">
         <button class="btn primary" id="export-all" aria-label="Export all frames as a ZIP of PNGs"><svg class="i"><use href="#i-download"/></svg><span class="hide-sm">Export</span><span class="badge" id="export-count">0</span></button>
@@ -212,7 +218,6 @@
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <div id="tour" class="tour" role="dialog" aria-modal="false" aria-labelledby="tour-title" hidden>
-  <div class="tour-stage" id="tour-stage" aria-hidden="true"></div>
   <div class="tour-body">
     <div class="tour-meta"><span id="tour-step" class="label"></span><button class="icon-btn sm" id="tour-pause" aria-label="Pause animation" title="Pause animation"><svg class="i"><use href="#i-pause"/></svg></button></div>
     <h2 id="tour-title"></h2>

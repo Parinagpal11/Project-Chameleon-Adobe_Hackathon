@@ -3,11 +3,16 @@
 'use strict';
 (function () {
   const imgCache = new Map();
+  // every canvas that drew a placeholder while the picture was loading gets redrawn when it arrives
+  const waiting = new Map();
   function loadImage(src, onload) {
-    if (imgCache.has(src)) return imgCache.get(src);
-    const im = new Image();
-    im.onload = () => onload && onload();
-    im.src = src; imgCache.set(src, im);
+    let im = imgCache.get(src);
+    if (!im) {
+      im = new Image(); imgCache.set(src, im); waiting.set(src, []);
+      im.onload = () => { const cbs = waiting.get(src) || []; waiting.delete(src); cbs.forEach(cb => cb()); };
+      im.src = src;
+    }
+    if (onload && !(im.complete && im.naturalWidth) && waiting.has(src)) waiting.get(src).push(onload);
     return im;
   }
 

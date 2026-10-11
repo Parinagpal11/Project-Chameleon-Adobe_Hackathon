@@ -55,7 +55,7 @@ class StudioE2E(unittest.TestCase):
         self.assertTrue(page.evaluate("activeFormats().every(f => display(f.key).elements.some(e => e.type === 'image' && e.src))"))
         # a size explains itself and offers the other layouts it tried
         page.evaluate("App.select({key:'feed',id:null})"); page.wait_for_timeout(300)
-        self.assertIn('Why it looks like this', page.inner_text('#pane-design'))
+        self.assertIn('why it looks like this', page.inner_text('#pane-design').lower())
         n = page.locator('#pane-design .layout-opt').count()
         if n > 1:
             page.locator('#pane-design .layout-opt').nth(1).click(); page.wait_for_function("!!S.choices.feed")
@@ -110,6 +110,32 @@ class StudioE2E(unittest.TestCase):
         self.assertTrue(page.evaluate("photoNode().src.startsWith('asset:')"))
         self.assertEqual(self.errors, []); page.close()
 
+
+    def test_how_it_works_from_the_studio_and_back(self):
+        page = self.open()
+        cid = page.evaluate("S.campaign")
+        page.click('#think-btn'); page.wait_for_url('**/how#from=studio')
+        page.wait_for_selector('#try-opts .opt', timeout=60000); page.wait_for_selector('#score-table .srow:not(.head)')
+        self.assertIn('Your design', page.inner_text('#how-design'))
+        self.assertEqual(page.locator('#plan-row .plan-card').count(), 6)
+        self.assertGreater(page.locator('#read-art .gbox').count(), 0)
+        self.assertEqual(page.get_attribute('#how-back', 'href'), '/#c=' + cid)
+        page.click('#how-back'); page.wait_for_selector('.frame >> nth=5')
+        self.assertEqual(page.evaluate("S.campaign"), cid)
+        self.assertEqual(self.errors, []); page.close()
+
+    def test_guided_tour_runs_and_puts_everything_back(self):
+        page = self.open()
+        page.evaluate("App.startTour(0)")
+        for _ in range(len(page.evaluate("App.TOUR_STEPS.map(s => s.title)"))):
+            page.wait_for_function("!document.getElementById('tour-next').disabled", timeout=30000)
+            page.click('#tour-next')
+        page.wait_for_function("document.getElementById('tour').hidden")
+        page.wait_for_timeout(1500)
+        self.assertEqual(page.evaluate("JSON.stringify(S.overrides)"), '{}')
+        self.assertEqual(page.evaluate("JSON.stringify(S.choices)"), '{}')
+        self.assertFalse(page.evaluate("!!(photoNode().meta||{}).focus"))
+        self.assertEqual(self.errors, []); page.close()
 
 if __name__ == '__main__':
     unittest.main()

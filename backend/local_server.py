@@ -64,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                 if p == '/eval': return self.send(200, service.eval_report())
                 if p == '/': file = service.ROOT / 'frontend' / 'index.html'
                 elif p == '/xray': file = service.ROOT / 'frontend' / 'xray.html'
+                elif p == '/how': file = service.ROOT / 'frontend' / 'how.html'
                 elif p in ('/report', '/eval/report'): file = service.ROOT / 'frontend' / 'eval.html'
                 elif p == '/example':
                     name = q.get('name', [next(iter(service.TEMPLATES), '')])[0]

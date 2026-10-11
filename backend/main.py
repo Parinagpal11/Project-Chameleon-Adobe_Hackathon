@@ -74,6 +74,8 @@ def eval_report(): return run(service.eval_report)
 def report(): return FileResponse(service.ROOT / 'frontend' / 'eval.html')
 @app.get('/xray')
 def xray(): return FileResponse(service.ROOT / 'frontend' / 'xray.html')
+@app.get('/how')
+def how(): return FileResponse(service.ROOT / 'frontend' / 'how.html')
 @app.get('/benchmark')
 def benchmark():
     from benchmark import run_benchmark

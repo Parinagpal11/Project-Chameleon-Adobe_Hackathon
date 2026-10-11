@@ -125,7 +125,7 @@ function restore(s) {
 function recordDesignChange(label, before) { const after = snapshot(); pushHistory({ label, undo: async () => restore(before), redo: async () => restore(after) }); }
 
 /* ───────── projects ───────── */
-const save = debounce(async () => {
+async function saveNow() {
   if (!S.campaign) return;
   $('save-state').textContent = 'Saving…';
   try {
@@ -136,7 +136,8 @@ const save = debounce(async () => {
     });
     $('save-state').textContent = 'Saved';
   } catch (e) { $('save-state').textContent = 'Not saved'; toast('Could not save: ' + e.message, { error: true }); }
-}, 600);
+}
+const save = debounce(saveNow, 600);
 
 /** Projects keep their design in the engine's graph format; older studio designs are converted once. */
 async function toGraph(d) {
@@ -169,10 +170,14 @@ async function openProject(campaign) {
   } catch (e) { toast('Could not open campaign: ' + e.message, { error: true }); }
 }
 async function startTemplate(id = 'snow_cabins', extra = {}) {
+  // "Try it on a sample" reopens the sample campaign it made before (if it still exists) instead of piling up copies
+  const reuse = !extra.assets && !extra.state && store.get('chameleon.sample.' + id);
+  if (reuse) { try { await api('/project?campaign=' + encodeURIComponent(reuse)); return openProject(reuse); } catch { /* deleted: make a new one */ } }
   try {
     const [d, list] = await Promise.all([api('/example?name=' + id), api('/templates')]);
     const t = list.find(x => x.id === id);
     await newProject(d, { name: t ? t.name : 'Untitled campaign', ...extra });
+    if (!extra.assets && !extra.state) store.set('chameleon.sample.' + id, S.campaign);
   } catch (e) { toast('Could not load the template: ' + e.message, { error: true }); }
 }
 
@@ -453,7 +458,7 @@ function readImage(file, kind) {
     fr.onerror = () => reject(Error('Could not read that file.'));
     fr.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(Error('That image could not be decoded.'));
+      img.onerror = () => reject(Error('That image could not be opened. Try a JPG or PNG.'));
       img.onload = () => {
         const max = kind === 'hero' ? 1600 : 900, s = Math.min(1, max / Math.max(img.width || 300, img.height || 100));
         const c = document.createElement('canvas'); c.width = Math.max(1, Math.round((img.width || 300) * s)); c.height = Math.max(1, Math.round((img.height || 100) * s));
@@ -619,9 +624,9 @@ registerMenu('main-menu-btn', 'main-menu', async () => {
     mi('download', 'Export all frames', exportZip, '⌘E'), mi('file', 'Download project file', exportJson),
     el('div', { class: 'menu-sep' }),
     mi(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', document.documentElement.dataset.theme === 'dark' ? 'Light theme' : 'Dark theme', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')),
-    mi('play', 'Product tour', () => App.startTour?.(0)), mi('book', 'Feature guides…', () => App.openGuides?.()),
+    mi('play', 'Product tour', () => App.startTour?.(0)),
     mi('keyboard', 'Keyboard shortcuts', () => $('shortcuts').showModal(), '?'),
-    mi('target', 'How it thinks (X-ray)', () => $('think-btn').click()),
+    mi('target', 'How it works', () => $('think-btn').click()),
     el('div', { class: 'menu-sep' }),
     mi('trash', 'Delete this campaign…', async () => { if (!confirm(`Delete “${S.name}”? This can’t be undone.`)) return; await api('/project?campaign=' + S.campaign, 'DELETE'); showHome(); }),
   );
@@ -630,11 +635,13 @@ registerMenu('export-menu-btn', 'export-menu');
 $('export-menu').addEventListener('click', e => { const b = e.target.closest('[data-export]'); if (!b) return; closeMenus(); ({ zip: exportZip, png: () => exportPng(), json: exportJson })[b.dataset.export](); });
 $('export-all').onclick = exportZip;
 $('undo').onclick = undo; $('redo').onclick = redo;
-/** Open the X-ray ("how it thinks") on this campaign's design, in a new tab. */
-$('think-btn').onclick = () => {
-  try { localStorage.setItem('chameleon.xray.design', JSON.stringify({ ...GV.resolved(S.design, S.assets), name: S.name })); }
-  catch { return toast('This design is too big to hand over to the X-ray. Use Export → project file and import it there.', { error: true }); }
-  window.open('/xray#from=studio', '_blank', 'noopener');
+/** "How it works": the engine explained step by step on this campaign's design (with a way back here). */
+$('think-btn').onclick = async () => {
+  try {
+    localStorage.setItem('chameleon.xray.design', JSON.stringify({ ...GV.resolved(S.design, S.assets), name: S.name }));
+    localStorage.setItem('chameleon.how.back', '/#c=' + S.campaign);
+  } catch { return toast('This design is too big to hand over. Use Export → project file instead.', { error: true }); }
+  save.cancel(); await saveNow(); location.href = '/how#from=studio';
 };
 $('sc-close').onclick = () => $('shortcuts').close();
 $('bench-close').onclick = () => $('bench').close();

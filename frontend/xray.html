@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Chameleon X-ray</title>
+<title>Chameleon · Engine room</title>
 <script>
   (function () { var t = null; try { t = localStorage.getItem('chameleon.theme'); } catch (e) {}
     if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -11,14 +11,15 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@500;600;700;800&family=DM+Serif+Display&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@500;600;700;800&family=DM+Serif+Display&display=swap">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/xray.css">
 </head>
 <body class="xr">
 <a class="skip" href="#xr-panel">Skip to findings</a>
 <header class="xr-top">
-  <div class="xr-brand"><span class="xr-mark" aria-hidden="true"></span><strong>Chameleon</strong><span class="xr-sub">X-ray</span></div>
+  <a class="xr-btn ghost" id="xr-back" href="/how"><svg class="i" aria-hidden="true"><use href="#i-chevronLeft"/></svg><span>How it works</span></a>
+  <div class="xr-brand"><a class="brand" href="/" aria-label="Chameleon home"><span class="brand-mark" aria-hidden="true"></span><span>chameleon</span></a><span class="xr-sub">Engine room</span></div>
   <div class="xr-tabs" role="tablist" aria-label="View">
     <button role="tab" id="tab-understand" aria-selected="true" aria-controls="xr-main">Understand</button>
     <button role="tab" id="tab-resize" aria-selected="false" aria-controls="xr-resize" tabindex="-1">Resize</button>
