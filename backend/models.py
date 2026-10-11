@@ -144,7 +144,7 @@ class ParseRuleRequest(StrictModel):
 
 class ProjectSave(StrictModel):
     name: str = Field(default='', max_length=80)
-    design: Design
+    design: dict[str, Any]                                    # chameleon-graph/1 (or the older studio format)
     formats: list[Target] = Field(default_factory=list, max_length=30)
     assets: dict[str, str] = Field(default_factory=dict)      # uploaded images as data URLs, keyed by asset id
     state: dict[str, Any] = Field(default_factory=dict)       # UI state: per-format overrides, layout choices

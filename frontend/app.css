@@ -410,3 +410,33 @@ input.project-name:focus { border-color: var(--accent); background: var(--surfac
 a.btn { color: inherit; text-decoration: none; }
 @media (max-width: 560px) { .xray-link span { display: none; } .xray-link { width: 32px; padding: 0; } }
 @media (max-width: 360px) { .tour-link span { display: none; } .tour-link { width: 32px; padding: 0; } }
+
+/* inspector: why a size looks the way it does, photo framing */
+.why-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.why-list li { position: relative; padding-left: 14px; font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.why-list li::before { content: ''; position: absolute; left: 2px; top: .6em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.seg.seg3 { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+.seg.seg3 button { width: auto; padding: 0 6px; font-weight: 600; font-size: 12px; }
+.seg.seg3 button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.focus-pick { position: relative; line-height: 0; border-radius: 8px; overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; margin-top: 2px; }
+.focus-pick img { width: 100%; height: auto; display: block; pointer-events: none; }
+.focus-box { position: absolute; border: 2px solid #facc15; background: rgba(250,204,21,.14); box-shadow: 0 0 0 9999px rgba(0,0,0,.35); border-radius: 4px; pointer-events: none; }
+
+/* home: the sample laid out for several sizes, one after another */
+.resize-demo { display: grid; place-items: center; overflow: hidden; background: var(--surface-2); }
+.rd-slide { grid-area: 1 / 1; margin: 0; display: grid; justify-items: center; gap: 6px; opacity: 0;
+  animation: rd-cycle calc(var(--n, 5) * 2.4s) infinite; animation-delay: calc(var(--i) * 2.4s); }
+.rd-slide canvas { box-shadow: var(--frame-shadow); border-radius: 2px; }
+.rd-slide figcaption { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@keyframes rd-cycle { 0% { opacity: 0; transform: scale(.96); } 4%, 18% { opacity: 1; transform: none; } 22%, 100% { opacity: 0; } }
+.resize-demo.still .rd-slide { animation: none; }
+.resize-demo.still .rd-slide:nth-child(2) { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .rd-slide { animation: none; } .rd-slide:nth-child(2) { opacity: 1; } }
+
+/* shown while the engine lays out the sizes (after a short delay, so quick updates don't flicker) */
+.layout-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); opacity: 0; transition: opacity .2s var(--ease); pointer-events: none; white-space: nowrap; }
+.layout-status i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: ls-spin .8s linear infinite; }
+body.is-busy .layout-status { opacity: 1; transition-delay: .25s; }
+@keyframes ls-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .layout-status i { animation: none; } }
+@media (max-width: 720px) { .layout-status { display: none; } }

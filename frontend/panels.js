@@ -43,7 +43,7 @@
         const kids = (d?.elements || []).filter(e => e.type !== 'decoration').map(e => {
           const isSel = S.sel && S.sel.key === f.key && S.sel.id === e.id, hidden = e.hidden || e.width <= 0;
           const r = el('div', { class: 'row child' + (isSel ? ' sel' : '') + (hidden ? ' is-hidden' : ''), role: 'treeitem', 'aria-selected': isSel, tabindex: '0', 'data-key': f.key, 'data-id': e.id },
-            ic(ROLE_ICON[roleOf(e)] || 'type', 'i row-icon'),
+            ic(e.type === 'image' ? 'image' : ROLE_ICON[roleOf(e)] || 'type', 'i row-icon'),
             el('span', { class: 'row-name', text: elName(e), title: elName(e) }),
             el('button', { class: 'icon-btn sm row-act' + (hidden ? ' on' : ''), tabindex: '-1', 'aria-label': hidden ? `Show ${elName(e)} in ${f.name}` : `Hide ${elName(e)} in ${f.name}`, title: hidden ? 'Show in this frame' : 'Hide in this frame',
               onclick: ev => { ev.stopPropagation(); applyAction(f.key, e.id, 'hide', !hidden, 'frame'); } }, ic(hidden ? 'eyeOff' : 'eye')));
@@ -71,42 +71,44 @@
   const SWATCHES = [['background', 'Background'], ['text', 'Text'], ['primary', 'Button'], ['accent', 'Image backdrop']];
   App.paintAssets = function () {
     if (!S.design) return;
-    const b = S.design.brand;
-    $('swatches').replaceChildren(...SWATCHES.map(([k, label]) => {
-      let before = null;
-      const small = el('small', { text: b[k] });
-      return el('label', { class: 'swatch' },
-        el('input', { type: 'color', value: b[k], 'aria-label': `${label} color`,
-          onfocus: () => { before = snapshot(); }, onclick: () => { before = before || snapshot(); },
-          oninput: e => { S.design.brand[k] = e.target.value; small.textContent = e.target.value; App.paint('canvas'); },
-          onchange: () => { if (before) recordDesignChange(`${label.toLowerCase()} color`, before); before = null; save(); } }),
-        el('span', {}, el('b', { text: label }), small));
-    }));
-    $('brand-font').value = b.font;
-    const textEls = S.design.elements.filter(e => e.type === 'text' || e.type === 'button' || (e.type === 'logo' && !e.src));
-    $('copy-fields').replaceChildren(...textEls.map(e => copyField(e)));
+    $('swatches').closest('.group').hidden = true;      // colours come from the design itself
+    const fam = mainFont(S.design), sel = $('brand-font');
+    if (![...sel.options].some(o => o.value === fam)) sel.append(el('option', { value: fam, text: fam }));
+    sel.value = fam;
+    $('copy-fields').replaceChildren(...textNodes(S.design).filter(n => (n.text || '').trim()).map(n => copyField(n)));
     for (const kind of ['hero', 'logo']) {
-      const t = kind === 'hero' ? S.design.elements.find(e => e.type === 'image') : S.design.elements.find(e => e.type === 'logo');
-      const src = t && t.src && t.src.startsWith('asset:') ? S.assets[t.src.slice(6)] : null;
+      const t = kind === 'hero' ? photoNode() : logoNode();
+      const src = t && t.src ? GV.resolve(t.src, S.assets) : null;
       $('thumb-' + kind).style.backgroundImage = src ? `url("${src}")` : '';
       $('thumb-' + kind).classList.toggle('has', !!src);
       $('rm-' + kind).hidden = !src;
     }
   };
-  function copyField(e, compact) {
+  /** A text node of the source design (n), or the label of a button group: its copy, shared by every size. */
+  function textTarget(id) {
+    const n = S.design.nodes.find(x => x.id === id); if (!n) return null;
+    if (n.type === 'text') return n;
+    if (n.type === 'group') return S.design.nodes.find(x => (n.children || []).includes(x.id) && x.type === 'text') || null;
+    return null;
+  }
+  App.textTarget = textTarget;
+  function copyField(n, compact) {
     let before = null;
-    const long = (e.text || '').length > 28 && e.type === 'text';
-    const input = el(long ? 'textarea' : 'input', { maxlength: 200, rows: long ? 2 : null, 'aria-label': `${niceRole(roleOf(e))} copy`,
+    const owner = S.design.nodes.find(g => g.type === 'group' && (g.children || []).includes(n.id));
+    const role = S.roleMap[n.id] || n.role || (owner && (S.roleMap[owner.id] || owner.role)) || 'body';
+    const long = (n.text || '').length > 28;
+    const input = el(long ? 'textarea' : 'input', { maxlength: 200, rows: long ? 2 : null, 'aria-label': `${niceRole(role)} copy`,
       onfocus: () => { before = snapshot(); },
-      oninput: ev => { const src = S.design.elements.find(x => x.id === e.id); if (src) src.text = ev.target.value; refresh(); },
-      onchange: () => { if (before) recordDesignChange(`${lowerRole(roleOf(e))} copy`, before); before = null; save(); App.paintAssets(); } });
-    input.value = e.text || '';
-    return compact ? input : el('label', {}, `${niceRole(roleOf(e))}${e.type === 'logo' ? ' (text logo)' : ''}`, input);
+      oninput: ev => { n.text = ev.target.value; refresh(); },
+      onchange: () => { if (before) recordDesignChange(`${lowerRole(role)} copy`, before); before = null; save(); App.paintAssets(); } });
+    input.value = n.text || '';
+    return compact ? input : el('label', {}, `${niceRole(role)}${role === 'logo' ? ' (text logo)' : ''}`, input);
   }
   $('brand-font').addEventListener('change', async e => {
-    const before = snapshot(); S.design.brand.font = e.target.value;
+    const before = snapshot();
+    for (const n of textNodes(S.design)) n.style = { ...(n.style || {}), fontFamily: e.target.value };
     try { await document.fonts.load(`800 40px "${e.target.value}"`); } catch { /* offline */ }
-    recordDesignChange('typeface', before); App.paint('canvas'); save();
+    recordDesignChange('typeface', before); refresh(); save();
   });
   for (const kind of ['hero', 'logo']) {
     $('up-' + kind).addEventListener('change', e => { if (e.target.files[0]) useUpload(e.target.files[0], kind); e.target.value = ''; });
@@ -139,13 +141,13 @@
       el('div', { class: 'insp-head' }, el('span', { class: 'role-chip' }, ic('grid')), el('div', {}, el('b', { text: S.name }), el('small', { text: 'Nothing selected · campaign overview' }))),
       group(null, el('div', { class: 'stat-grid' },
         el('div', { class: 'stat' }, el('b', { text: frames.length }), el('span', { text: 'Frames' })),
-        el('div', { class: 'stat' }, el('b', { text: S.rules.filter(r => r.enabled).length }), el('span', { text: 'Active rules' })),
+        el('div', { class: 'stat' }, el('b', { text: frames.reduce((n, f) => n + Object.keys(S.overrides[f.key] || {}).length, 0) }), el('span', { text: 'Your tweaks' })),
         el('div', { class: 'stat' }, el('b', { text: all.length }), el('span', { text: 'Warnings' })))),
       group('Needs attention', all.length
         ? el('ul', { class: 'issue-list' }, all.slice(0, 12).map(i => el('li', { class: 'issue' }, ic('alert'), el('span', { text: `${i.f.name}: ${i.text}` }),
           el('button', { class: 'btn ghost sm', text: 'Show', onclick: () => { App.select({ key: i.key, id: i.id || null }); App.focusFrame(i.key); } }))))
         : el('div', { class: 'issue ok' }, ic('check'), el('span', { text: 'Every frame passes the checks' }))),
-      group('Get started', el('p', { class: 'hint', text: 'Click any element on the canvas to edit it. Choose whether a change applies to all frames (a rule) or just one.' }),
+      group('Get started', el('p', { class: 'hint', text: 'Click a size to see why it looks the way it does and the other layouts Chameleon tried. Drag anything to adjust that size only.' }),
         el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
           el('button', { class: 'btn sm', onclick: () => App.openAddFrame?.() }, ic('plus'), 'Add frame'),
           el('button', { class: 'btn sm', onclick: () => App.startTour?.(0) }, ic('play'), 'Take the tour'))),
@@ -155,9 +157,11 @@
     const f = fmt(key), res = S.results[key], issues = issuesOf(key), tweaks = Object.keys(S.overrides[key] || {}).length;
     return [
       el('div', { class: 'insp-head' }, el('span', { class: 'role-chip' }, ic('frame')), el('div', {}, el('b', { text: f.name }), el('small', { text: `${f.width} × ${f.height} px · ${f.group}` }))),
-      group('Layout', el('div', { class: 'layouts', role: 'radiogroup', 'aria-label': 'Layout options' }, (res?.candidates || []).map(c => {
-        const on = c === chosen(key), cv = el('canvas', { 'aria-hidden': 'true' }), dd = clone(c.design); dd.brand = S.design.brand;
-        R.draw(cv, dd, { assets: S.assets, scale: Math.min(76 / f.width, 52 / f.height), dpr: DPR });
+      whyGroup(key),
+      framingGroup(),
+      group(res?.candidates?.length > 1 ? 'Layouts tried' : 'Layout', el('div', { class: 'layouts', role: 'radiogroup', 'aria-label': 'Layout options' }, (res?.candidates || []).map(c => {
+        const on = c === chosen(key), cv = el('canvas', { 'aria-hidden': 'true' });
+        GV.draw(cv, displayOf(c), { scale: Math.min(76 / f.width, 52 / f.height), dpr: DPR });
         const n = issuesOf(key, c).length;
         return el('button', { class: 'layout-opt', role: 'radio', 'aria-checked': on, 'aria-label': `${STRATEGY[c.strategy] || c.strategy}${n ? `, ${n} warnings` : ''}`, onclick: () => {
           if (on) return; const before = snapshot(); S.choices[key] = c.strategy; recordDesignChange('layout choice', before); App.paint('all'); save();
@@ -165,7 +169,7 @@
       }))),
       group('Checks', issues.length
         ? el('ul', { class: 'issue-list' }, issues.map(i => el('li', { class: 'issue' }, ic('alert'), el('span', { text: i.text }), i.id ? el('button', { class: 'btn ghost sm', text: 'Select', onclick: () => App.select({ key, id: i.id }) }) : null)))
-        : el('div', { class: 'issue ok' }, ic('check'), el('span', { text: 'No overlaps, nothing outside the frame, text 12px or larger, rules met' }))),
+        : el('div', { class: 'issue ok' }, ic('check'), el('span', { text: 'No overlaps, nothing outside the frame, text 12px or larger, readable contrast' }))),
       tweaks ? group('Frame-only tweaks', el('div', { class: 'ctrl-row' }, el('span', { class: 'muted', text: `${tweaks} element${tweaks > 1 ? 's' : ''} changed only here` }), el('button', { class: 'btn sm', text: 'Reset', onclick: () => clearOverrides(key) }))) : null,
       group('Frame', el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
         el('button', { class: 'btn sm', onclick: () => exportPng(key) }, ic('download'), 'Export PNG'),
@@ -174,53 +178,91 @@
     ];
   }
   function elementView(key, d, e) {
-    const f = fmt(key), role = roleOf(e), isImg = e.type === 'image', all = S.scope === 'all';
-    const short = Math.min(f.width, f.height);
-    const scope = el('div', { class: 'scope', role: 'radiogroup', 'aria-label': 'Apply changes to' },
-      el('button', { role: 'radio', 'aria-checked': all, onclick: () => { S.scope = 'all'; paintDesign(); } }, 'All frames'),
-      el('button', { role: 'radio', 'aria-checked': !all, onclick: () => { S.scope = 'frame'; paintDesign(); } }, 'This frame'));
-    const pinRule = ruleFor('pin', role), alignNow = e.align || 'left';
-    const pinVal = all ? (pinRule ? pinRule.params.corner : 'none') : cornerOf(e, d);
+    const f = fmt(key), role = roleOf(e), isImg = e.type === 'image';
+    const alignNow = e.align || 'left';
+    const pinVal = cornerOf(e, d);
     const cells = ['top-left', 'top-center', 'top-right', 'mid-left', 'none', 'mid-right', 'bottom-left', 'bottom-center', 'bottom-right'];
     const pinGrid = el('div', { class: 'pin-grid', role: 'group', 'aria-label': 'Pin to corner' }, cells.map(c => {
       const usable = CORNERS.includes(c) || c === 'none';
       return el('button', { class: c === 'none' ? 'center' : usable ? '' : 'na', tabindex: usable ? null : '-1', 'aria-hidden': usable ? null : 'true', disabled: !usable || null,
-        'aria-pressed': usable ? pinVal === c : null, 'aria-label': usable ? (c === 'none' ? 'Not pinned' : `Pin ${c.replace('-', ' ')}`) : null, title: usable ? (c === 'none' ? 'Not pinned (follows layout)' : `Pin ${c.replace('-', ' ')}`) : null,
-        onclick: usable ? () => applyAction(key, e.id, 'pin', c) : null });
+        'aria-pressed': usable ? pinVal === c : null, 'aria-label': usable ? (c === 'none' ? 'Not pinned' : `Pin ${c.replace('-', ' ')}`) : null, title: usable ? (c === 'none' ? 'Back to the layout position' : `Pin ${c.replace('-', ' ')}`) : null,
+        onclick: usable ? () => applyAction(key, e.id, 'pin', c, 'frame') : null });
     }));
-    const weight = all ? currentWeight(role) : 1;
-    const hiddenHere = !!e.hidden, hideRule = ruleFor('hide_small', role);
-    const visible = all ? !(hideRule && short < hideRule.params.below) : !hiddenHere;
+    const visible = !e.hidden;
     const ov = (S.overrides[key] || {})[e.id];
-    const rel = rulesForRole(role);
-    const content = (e.type === 'text' || e.type === 'button' || (e.type === 'logo' && !e.src)) ? S.design.elements.find(x => x.id === e.id) : null;
+    const content = App.textTarget(e.id);
     return [
       el('div', { class: 'insp-head' }, el('span', { class: 'role-chip' }, ic(ROLE_ICON[role] || 'type')), el('div', {}, el('b', { text: elName(e) }), el('small', { text: `in ${f.name} · ${Math.round(e.width)}×${Math.round(e.height)}` }))),
-      group(null, scope, el('p', { class: 'hint', text: all ? 'Changes are saved as campaign rules and update every frame.' : `Changes only affect ${f.name}.` })),
-      group('Role', el('select', { 'aria-label': 'Semantic role', onchange: ev => {
-        const src = S.design.elements.find(x => x.id === e.id); if (!src) return; const before = snapshot();
-        src.genome = Object.assign(src.genome || { importance: .5, removable: false, scalable: true, reflow: false, relationships: [] }, { role: ev.target.value, removable: ev.target.value === 'decoration' });
-        recordDesignChange('role change', before); refresh(); save();
-      } }, ROLES.map(r => el('option', { value: r, selected: r === role, text: niceRole(r) }))), el('p', { class: 'hint', text: 'Rules follow roles, so they work on any design.' })),
-      content ? group('Content', copyField(content, true), el('p', { class: 'hint', text: 'Copy is shared by every frame.' })) : null,
-      !isImg ? group('Layout',
+      content ? group('Text', copyField(content, true), el('p', { class: 'hint', text: 'Text is shared by every size.' })) : null,
+      !isImg ? group(`Adjust in ${f.name}`,
         el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Pin' }), pinGrid),
-        el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Align' }), el('div', { class: 'seg', role: 'group', 'aria-label': 'Alignment' },
-          [['left', 'alignLeft'], ['center', 'alignCenter'], ['right', 'alignRight']].map(([a, icn]) => el('button', { 'aria-pressed': alignNow === a, 'aria-label': `Align ${a}`, title: `Align ${a}`, onclick: () => applyAction(key, e.id, 'align', a) }, ic(icn))))),
+        e.type === 'text' || e.type === 'logo' && !e.src ? el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Align' }), el('div', { class: 'seg', role: 'group', 'aria-label': 'Alignment' },
+          [['left', 'alignLeft'], ['center', 'alignCenter'], ['right', 'alignRight']].map(([a, icn]) => el('button', { 'aria-pressed': alignNow === a, 'aria-label': `Align ${a}`, title: `Align ${a}`, onclick: () => applyAction(key, e.id, 'align', a, 'frame') }, ic(icn))))) : null,
         el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Size' }), el('div', { class: 'stepper' },
-          el('button', { 'aria-label': 'Smaller', title: 'Smaller', onclick: () => applyAction(key, e.id, 'size', all ? weight * .8 : .87) }, '−'),
-          el('output', { 'aria-live': 'polite', text: all ? `×${(Math.round(weight * 100) / 100).toFixed(2)}` : `${Math.round(e.fontSize || e.height)}px` }),
-          el('button', { 'aria-label': 'Bigger', title: 'Bigger', onclick: () => applyAction(key, e.id, 'size', all ? weight * 1.25 : 1.15) }, '+'))),
-      ) : null,
+          el('button', { 'aria-label': 'Smaller', title: 'Smaller', onclick: () => applyAction(key, e.id, 'size', .87, 'frame') }, '−'),
+          el('output', { 'aria-live': 'polite', text: e.fontSize ? `${Math.round(e.fontSize)}px` : `${Math.round(e.height)}px` }),
+          el('button', { 'aria-label': 'Bigger', title: 'Bigger', onclick: () => applyAction(key, e.id, 'size', 1.15, 'frame') }, '+'))),
+        el('p', { class: 'hint', text: `Only ${f.name} changes. You can also drag it on the canvas.` }),
+      ) : group('Photo', el('p', { class: 'hint', text: 'Chameleon frames the photo for each size. To choose what must stay in view, use Photo framing on the size.' }),
+        el('button', { class: 'btn sm', onclick: () => App.select({ key, id: null }) }, ic('image'), 'Photo framing')),
       group('Visibility', el('div', { class: 'ctrl-row' },
-        el('span', { text: all ? `Show in frames ${short}px and smaller` : `Show in ${f.name}` }),
-        el('button', { class: 'toggle', role: 'switch', 'aria-checked': visible, 'aria-label': 'Visible', onclick: () => applyAction(key, e.id, 'hide', visible) })),
-        all && hideRule ? el('p', { class: 'hint', text: `Rule: hidden when the short side is under ${hideRule.params.below}px.` }) : null),
-      ov ? group('Frame tweak', el('div', { class: 'ctrl-row' }, el('span', { class: 'muted', text: 'This element is adjusted only in this frame.' }),
+        el('span', { text: `Show in ${f.name}` }),
+        el('button', { class: 'toggle', role: 'switch', 'aria-checked': visible, 'aria-label': 'Visible', onclick: () => applyAction(key, e.id, 'hide', visible, 'frame') }))),
+      ov ? group('Your tweak', el('div', { class: 'ctrl-row' }, el('span', { class: 'muted', text: 'Changed by you in this size.' }),
         el('button', { class: 'btn sm', text: 'Reset', onclick: () => { const before = snapshot(); delete S.overrides[key][e.id]; recordDesignChange('reset tweak', before); App.paint('all'); save(); } }))) : null,
-      group('Rules for this role', rel.length ? el('ul', { class: 'mini-rules' }, rel.map(r => el('li', {}, ic(RULE_ICON[r.type]), el('span', { text: r.label })))) : el('p', { class: 'hint', text: 'None yet. Drag it on the canvas or use the controls above.' })),
       el('div', { class: 'group' }, el('button', { class: 'btn sm', onclick: () => App.select({ key, id: null }) }, ic('chevronLeft'), `Back to ${f.name}`)),
     ];
+  }
+
+  /* why a size looks the way it does, in the engine's own words (minus its internal tier label) */
+  function whyGroup(key) {
+    const c = chosen(key); if (!c) return null;
+    const why = (c.reasons || []).filter(r => !/^Tier \d/.test(r));
+    if (!why.length) return null;
+    return group('Why it looks like this', el('ul', { class: 'why-list' }, why.slice(0, 6).map(r => el('li', { text: r }))));
+  }
+
+  /* photo framing: Auto / Whole photo / Focus area (drag on the photo); it applies to every size */
+  let framingMode = null;
+  function framingGroup() {
+    const p = photoNode(); if (!p) return null;
+    const meta = p.meta || {}, mode = framingMode || (meta.keepWhole ? 'whole' : meta.focus ? 'focus' : 'auto');
+    const set = (m, focus) => {
+      const before = snapshot(), mt = { ...(p.meta || {}) };
+      delete mt.keepWhole; delete mt.focus;
+      if (m === 'whole') mt.keepWhole = true;
+      if (m === 'focus') mt.focus = focus.map(v => Math.round(v * 1e4) / 1e4);
+      p.meta = mt; framingMode = null;
+      recordDesignChange(m === 'auto' ? 'photo framing: auto' : m === 'whole' ? 'keep whole photo' : 'focus area', before);
+      refresh(true); save();
+    };
+    const seg = el('div', { class: 'seg seg3', role: 'radiogroup', 'aria-label': 'How every size frames the photo' },
+      [['auto', 'Auto'], ['focus', 'Focus area'], ['whole', 'Whole photo']].map(([m, label]) => el('button', { role: 'radio', 'aria-checked': mode === m, text: label,
+        onclick: () => { if (m === 'focus') { framingMode = 'focus'; paintDesign(true); if (meta.focus) return; return; } set(m); } })));
+    const hint = { auto: 'Chameleon finds the subject (faces, people, objects) and frames every size around it.',
+      whole: 'Every size shows the entire photo, never cropped. Space around it is filled, not left blank.',
+      focus: meta.focus ? 'Every size keeps your focus area in view. Drag on the photo to redraw it.' : 'Drag on the photo to mark what must stay in view at every size.' }[mode];
+    const kids = [seg, el('p', { class: 'hint', text: hint })];
+    const src = p.src ? GV.resolve(p.src, S.assets) : null;
+    if (mode === 'focus' && src) kids.push(focusPicker(src, meta.focus, box => set('focus', box)));
+    return group('Photo framing', ...kids);
+  }
+  function focusPicker(src, focus, done) {
+    const wrap = el('div', { class: 'focus-pick' }), img = el('img', { src, alt: 'The whole photo. Drag to mark the focus area.', draggable: 'false' });
+    const box = el('div', { class: 'focus-box' });
+    wrap.append(img, box);
+    const show = b => { if (!b) { box.hidden = true; return; } box.hidden = false; Object.assign(box.style, { left: b[0] * 100 + '%', top: b[1] * 100 + '%', width: b[2] * 100 + '%', height: b[3] * 100 + '%' }); };
+    show(focus);
+    wrap.addEventListener('pointerdown', ev => {
+      ev.preventDefault(); wrap.setPointerCapture(ev.pointerId);
+      const r = wrap.getBoundingClientRect(), pt = e2 => [Math.min(1, Math.max(0, (e2.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e2.clientY - r.top) / r.height))];
+      const p0 = pt(ev); let b = null;
+      const move = e2 => { const p = pt(e2); b = [Math.min(p0[0], p[0]), Math.min(p0[1], p[1]), Math.abs(p[0] - p0[0]), Math.abs(p[1] - p0[1])]; show(b); };
+      const up = () => { wrap.removeEventListener('pointermove', move); wrap.removeEventListener('pointerup', up); wrap.removeEventListener('pointercancel', up);
+        if (b && b[2] > .03 && b[3] > .03) done(b); else show(focus); };
+      wrap.addEventListener('pointermove', move); wrap.addEventListener('pointerup', up); wrap.addEventListener('pointercancel', up);
+    });
+    return wrap;
   }
   function cornerOf(e, d) {
     const W = d.canvas.width, H = d.canvas.height, t = Math.min(W, H) * .1;

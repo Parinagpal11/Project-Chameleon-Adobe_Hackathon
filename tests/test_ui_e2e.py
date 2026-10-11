@@ -1,4 +1,4 @@
-"""Browser end-to-end tests of the v3 studio. Skips unless Playwright + Chromium are installed:
+"""Browser end-to-end tests of the Studio (every size laid out by the layout engine). Skips unless Playwright + Chromium are installed:
     pip install playwright && python -m playwright install chromium
 """
 import base64, json, os, struct, sys, tempfile, threading, unittest, zipfile
@@ -39,67 +39,75 @@ class StudioE2E(unittest.TestCase):
         page.wait_for_timeout(500)
         return page
 
-    def drag_logo_to_corner(self, page, key='ig-post'):
+    def drag(self, page, key, eid, dx, dy):
         page.evaluate(f"App.focusFrame('{key}')"); page.wait_for_timeout(200)
-        b = page.evaluate(f"App.elBoxClient('{key}','logo')")
-        f = page.evaluate(f"""(()=>{{const l=App.view.layout['{key}'],r=document.getElementById('viewport').getBoundingClientRect(),z=App.view.zoom;
-             return {{x:l.x*z+App.view.x+r.left,y:l.y*z+App.view.y+r.top,w:l.w*z,h:l.h*z}}}})()""")
+        b = page.evaluate(f"App.elBoxClient('{key}','{eid}')")
         x, y = b['x'] + b['w'] / 2, b['y'] + b['h'] / 2
-        tx, ty = f['x'] + f['w'] - b['w'] / 2 - 8, f['y'] + f['h'] - b['h'] / 2 - 8
         page.mouse.move(x, y); page.mouse.down()
-        for i in range(1, 11): page.mouse.move(x + (tx - x) * i / 10, y + (ty - y) * i / 10)
-        page.mouse.up(); page.wait_for_selector('#noticed:not([hidden])')
+        for i in range(1, 11): page.mouse.move(x + dx * i / 10, y + dy * i / 10)
+        page.mouse.up(); page.wait_for_timeout(300)
 
-    def test_teach_rule_by_dragging_and_export_zip(self):
+    def test_sample_layout_options_tweak_and_export_zip(self):
         page = self.open()
         self.assertEqual(page.locator('.frame').count(), 6)
-        self.drag_logo_to_corner(page)
-        self.assertIn('pinned bottom right', page.inner_text('#noticed-options').lower())
-        page.click('#noticed-all'); page.wait_for_function('S.rules.length===1')
-        cov = page.evaluate('ruleCoverage(S.rules[0])'); self.assertEqual((cov['met'], cov['applies']), (6, 6))
-        page.keyboard.press('Control+z'); page.wait_for_function('S.rules.length===0')
-        page.keyboard.press('Control+Shift+z'); page.wait_for_function('S.rules.length===1')
+        # every size comes from the engine, with a photo and no failed checks
+        self.assertTrue(page.evaluate("activeFormats().every(f => chosen(f.key) && chosen(f.key).checks.ok)"))
+        self.assertTrue(page.evaluate("activeFormats().every(f => display(f.key).elements.some(e => e.type === 'image' && e.src))"))
+        # a size explains itself and offers the other layouts it tried
+        page.evaluate("App.select({key:'feed',id:null})"); page.wait_for_timeout(300)
+        self.assertIn('Why it looks like this', page.inner_text('#pane-design'))
+        n = page.locator('#pane-design .layout-opt').count()
+        if n > 1:
+            page.locator('#pane-design .layout-opt').nth(1).click(); page.wait_for_function("!!S.choices.feed")
+        # dragging the headline changes that size only, and undo puts it back
+        self.drag(page, 'ig-post', 'headline', 30, 40)
+        self.assertTrue(page.evaluate("!!S.overrides['ig-post'].headline"))
+        self.assertFalse(page.evaluate("!!(S.overrides.feed||{}).headline"))
+        self.assertEqual(page.locator('.frame-label[data-key="ig-post"] .flag.tw').count(), 1)
+        page.keyboard.press('Control+z'); page.wait_for_function("!(S.overrides['ig-post']||{}).headline")
         with page.expect_download() as dl: page.click('#export-all')
         z = zipfile.ZipFile(dl.value.path()); pngs = [n for n in z.namelist() if n.endswith('.png')]
         self.assertEqual(len(pngs), 6)
         self.assertIn((728, 90), [struct.unpack('>II', z.read(n)[16:24]) for n in pngs])
         self.assertEqual(self.errors, []); page.close()
 
-    def test_frame_only_tweak_inspector_and_typed_rule(self):
+    def settle(self, page):
+        page.wait_for_timeout(200)
+        page.wait_for_function("!document.body.classList.contains('is-busy')", timeout=30000)
+
+    def test_photo_framing_whole_and_focus(self):
         page = self.open()
-        self.drag_logo_to_corner(page)
-        page.click('#noticed-one'); page.wait_for_timeout(300)
-        self.assertTrue(page.evaluate("!!S.overrides['ig-post'].logo"))
-        self.assertEqual(page.locator('.frame-label[data-key="ig-post"] .flag.tw').count(), 1)
-        page.evaluate("App.select({key:'feed',id:'cta'})"); page.wait_for_timeout(200)
-        page.click('#pane-design [aria-label="Pin top right"]'); page.wait_for_function("S.rules.some(r=>r.type==='pin'&&r.params.role==='cta')")
-        page.keyboard.press('Control+k'); page.keyboard.type('hide the offer on small banners'); page.keyboard.press('Enter')
-        page.click('#pr-add'); page.wait_for_function("S.rules.some(r=>r.type==='hide_small')")
-        self.assertTrue(page.evaluate("display('leaderboard').elements.find(e=>e.id==='offer').hidden"))
+        page.evaluate("App.select({key:'feed',id:null})"); page.wait_for_timeout(300)
+        page.click('#pane-design [role="radio"]:has-text("Whole photo")')
+        page.wait_for_function("photoNode().meta.keepWhole === true"); self.settle(page)
+        kept = page.evaluate("activeFormats().map(f => chosen(f.key).checks.subject_kept)")
+        self.assertTrue(all(k >= .98 for k in kept), kept)          # the whole photo shows at every size
+        page.click('#pane-design [role="radio"]:has-text("Focus area")')
+        pick = page.locator('.focus-pick'); pick.scroll_into_view_if_needed(); b = pick.bounding_box()
+        x0, y0 = b['x'] + b['width'] * .4, b['y'] + b['height'] * .55
+        page.mouse.move(x0, y0); page.mouse.down(); page.mouse.move(x0 + b['width'] * .2, y0 + b['height'] * .25, steps=6); page.mouse.up()
+        page.wait_for_function("!!photoNode().meta.focus && !photoNode().meta.keepWhole"); self.settle(page)
+        kept = page.evaluate("activeFormats().map(f => [f.key, chosen(f.key).checks.subject_kept, photoNode().meta.focus])")
+        self.assertTrue(all((k or 0) >= .9 for _, k, _ in kept), kept)   # the marked area stays in view
+        page.click('#pane-design [role="radio"]:has-text("Auto")')
+        page.wait_for_function("!photoNode().meta.focus && !photoNode().meta.keepWhole")
         self.assertEqual(self.errors, []); page.close()
 
-    def test_bubbles_frames_drop_and_reopen(self):
+    def test_frames_photo_drop_and_reopen(self):
         page = self.open()
-        page.click('#tab-rules')
-        page.evaluate("App.zoomFit()"); page.wait_for_timeout(200)
-        bub = page.locator('.bubble:has-text("Pin top-left")').bounding_box()
-        t = page.evaluate("App.elBoxClient('ig-story','headline')")
-        sx, sy, tx, ty = bub['x'] + 20, bub['y'] + 10, t['x'] + t['w'] / 2, t['y'] + t['h'] / 2
-        page.mouse.move(sx, sy); page.mouse.down()
-        for i in range(1, 13): page.mouse.move(sx + (tx - sx) * i / 12, sy + (ty - sy) * i / 12)
-        page.mouse.up(); page.wait_for_function("S.rules.some(r=>r.type==='pin'&&r.params.role==='headline')")
         page.click('#add-frame-btn'); page.click('.preset[data-key="yt"]'); page.wait_for_function("document.querySelectorAll('.frame').length===7")
-        logo = (ROOT / 'previews' / 'v3-home.png').read_bytes()
+        photo = (ROOT / 'tests' / 'fixtures' / 'photos' / 'user-coral-sandal.jpg').read_bytes()
         page.evaluate("""async (b64)=>{const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));const dt=new DataTransfer();
-            dt.items.add(new File([bin],'photo.png',{type:'image/png'}));
+            dt.items.add(new File([bin],'sandal.jpg',{type:'image/jpeg'}));
             for(const t of ['dragenter','dragover','drop']) window.dispatchEvent(new DragEvent(t,{dataTransfer:dt,clientX:700,clientY:500,bubbles:true,cancelable:true}));}""",
-                      base64.b64encode(logo).decode())
+                      base64.b64encode(photo).decode())
         page.wait_for_function("Object.keys(S.assets).length===1")
+        page.wait_for_function("photoNode().src.startsWith('asset:') && activeFormats().every(f => chosen(f.key))", timeout=30000)
         page.wait_for_timeout(900)
         page.reload(); page.wait_for_selector('.frame >> nth=6')
         page.wait_for_timeout(500)
         self.assertEqual(page.evaluate("Object.keys(S.assets).length"), 1)
-        self.assertTrue(page.evaluate("S.rules.length>=1"))
+        self.assertTrue(page.evaluate("photoNode().src.startsWith('asset:')"))
         self.assertEqual(self.errors, []); page.close()
 
 

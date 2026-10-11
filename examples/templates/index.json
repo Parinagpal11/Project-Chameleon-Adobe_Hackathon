@@ -1,0 +1,18 @@
+{
+ "snow_cabins": {
+  "name": "Snow cabins",
+  "description": "Travel ad with a full-bleed photo and people"
+ },
+ "coffee_split": {
+  "name": "Roast & Co. coffee",
+  "description": "Photo beside the copy, with a trial button"
+ },
+ "recipe_story": {
+  "name": "Lemon pasta recipe",
+  "description": "Story with a big food photo on top"
+ },
+ "summer_sale": {
+  "name": "Summer sandal sale",
+  "description": "Bold offer with a product shot and legal line"
+ }
+}

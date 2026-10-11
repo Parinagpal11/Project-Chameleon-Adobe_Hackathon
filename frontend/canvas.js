@@ -68,8 +68,7 @@
   App.curDesign = curDesign;
   function drawFrame(key) {
     const fr = V.frames[key], d = curDesign(key); if (!fr || !d) return;
-    R.draw(fr.canvas, d, { assets: S.assets, scale: Math.min(V.zoom, 4), dpr: DPR, css: false });
-    S.metrics[key] = fr.canvas._metrics;
+    GV.draw(fr.canvas, d, { scale: Math.min(V.zoom, 4), dpr: DPR, css: false });
   }
   function drawAll() {
     V.renderedZoom = V.zoom;
@@ -310,7 +309,6 @@
     if (document.querySelector('dialog[open]')) return;
     if (mod && k === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k === 'y' && !typing) { e.preventDefault(); redo(); return; }
-    if (mod && k === 'k') { e.preventDefault(); App.focusRuleInput?.(); return; }
     if (mod && k === 'e') { e.preventDefault(); exportZip(); return; }
     if (typing) return;
     if (mod && (k === '=' || k === '+')) { e.preventDefault(); centerZoom(1.25); return; }
@@ -335,7 +333,7 @@
       e.preventDefault();
       const key = S.sel.key, id = S.sel.id, t = curDesign(key).elements.find(x => x.id === id), f = fmt(key);
       applyAction(key, id, 'hide', true, 'frame');
-      toast(`Hidden in ${f.name} only`, { action: 'Hide in all frames this small', onAction: () => applyAction(key, id, 'hide', true, 'all'), ms: 6000 });
+      toast(`Hidden in ${f.name} only`, { action: 'Undo', onAction: undo, ms: 6000 });
       select({ key, id: null });
       return;
     }

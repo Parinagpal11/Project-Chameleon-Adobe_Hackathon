@@ -23,7 +23,9 @@ def run(fn, *args):
 @app.get('/health')
 def health(): return {'status': 'ok'}
 @app.get('/example')
-def example(): return FileResponse(service.ROOT / 'examples' / 'coffee_ad.json')
+def example(name: str = 'snow_cabins'):
+    if name not in service.TEMPLATES: raise HTTPException(404, 'Unknown template')
+    return FileResponse(service.TEMPLATE_DIR / f'{name}.json')
 @app.get('/rules')
 def rules(campaign: str = 'coffee-launch'): return run(service.get_rules, campaign)
 @app.delete('/rules')
@@ -58,6 +60,8 @@ def drop(campaign: str): return run(service.delete_project, campaign)
 def analyze(data: dict): return run(service.analyze_request, data)
 @app.post('/adapt')
 def adapt(data: dict): return run(service.adapt_request, data)
+@app.post('/convert')
+def convert(data: dict): return run(service.convert_request, data)
 @app.get('/testset')
 def testset():
     from engine.plan import EVAL_SIZES

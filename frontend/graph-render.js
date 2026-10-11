@@ -124,7 +124,7 @@
     const W = v ? v.width : design.page.width, H = v ? v.height : design.page.height;
     const scale = opts.scale || 1, dpr = opts.dpr || window.devicePixelRatio || 1;
     canvas.width = Math.round(W * scale * dpr); canvas.height = Math.round(H * scale * dpr);
-    canvas.style.width = W * scale + 'px'; canvas.style.height = H * scale + 'px';
+    if (opts.css !== false) { canvas.style.width = W * scale + 'px'; canvas.style.height = H * scale + 'px'; }
     const ctx = canvas.getContext('2d');
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
     ctx.fillStyle = opts.matte || design.page.background || '#fff'; ctx.fillRect(0, 0, W, H);

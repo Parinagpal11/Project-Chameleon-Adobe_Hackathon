@@ -615,12 +615,20 @@
       ts.designs.forEach(d => (groups[d.level] = groups[d.level] || []).push(d));
       for (const lvl of ['simple', 'medium', 'hard', ...Object.keys(groups).filter(x => !['simple', 'medium', 'hard'].includes(x))]) {
         if (!groups[lvl]) continue;
-        $('xr-design').append(el('optgroup', { label: lvl[0].toUpperCase() + lvl.slice(1) },
+        $('xr-design').append(el('optgroup', { label: 'Test designs · ' + lvl },
           ...groups[lvl].map(d => el('option', { value: d.id, text: `${d.name} · ${d.width}×${d.height}` }))));
       }
       const m = location.hash.match(/d=([\w-]+)/);
-      const first = (m && ts.designs.find(d => d.id === m[1])) ? m[1] : ts.designs[0]?.id;
-      if (first) { $('xr-design').value = first; pick(first); }
+      let fromStudio = null;
+      if (/from=studio/.test(location.hash)) { try { fromStudio = JSON.parse(localStorage.getItem('chameleon.xray.design') || 'null'); } catch { /* none */ } }
+      if (fromStudio && Array.isArray(fromStudio.nodes)) {        // opened from the Studio's "How it thinks" button
+        const opt = el('option', { value: 'import:studio', text: 'From the Studio · ' + (fromStudio.name || 'your design') });
+        $('xr-design').prepend(opt); $('xr-design').value = opt.value;
+        show(fromStudio);
+      } else {
+        const first = (m && ts.designs.find(d => d.id === m[1])) ? m[1] : ts.designs[0]?.id;
+        if (first) { $('xr-design').value = first; pick(first); }
+      }
       if (/v=resize/.test(location.hash)) setView('resize');
     }).catch(e => showError(e.message));
   }

@@ -66,9 +66,9 @@ class Handler(BaseHTTPRequestHandler):
                 elif p == '/xray': file = service.ROOT / 'frontend' / 'xray.html'
                 elif p in ('/report', '/eval/report'): file = service.ROOT / 'frontend' / 'eval.html'
                 elif p == '/example':
-                    name = q.get('name', ['coffee_ad'])[0]
+                    name = q.get('name', [next(iter(service.TEMPLATES), '')])[0]
                     if name not in service.TEMPLATES: return self.send(404, {'detail': 'Unknown template'})
-                    file = service.ROOT / 'examples' / f'{name}.json'
+                    file = service.TEMPLATE_DIR / f'{name}.json'
                 elif p == '/templates': return self.send(200, [{'id': k, **v} for k, v in service.TEMPLATES.items()])
                 elif p.startswith('/assets/'):
                     base = (service.ROOT / 'frontend').resolve()
@@ -104,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = service.analyze_request(data)
                 elif p == '/adapt':
                     result = service.adapt_request(data)
+                elif p == '/convert':
+                    result = service.convert_request(data)
                 elif p == '/parse-rule':
                     req = ParseRuleRequest.model_validate(data)
                     result = parse_text(req.text, req.roles)

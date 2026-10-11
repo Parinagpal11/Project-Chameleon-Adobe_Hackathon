@@ -25,8 +25,8 @@ const STRATEGY = { hero_top: 'Image top', hero_small: 'Small image', stacked: 'I
 /* ───────── state ───────── */
 const S = {
   view: 'home', campaign: null, name: '', design: null, assets: {}, custom: [], selected: new Set(DEFAULT_SELECTED),
-  results: {}, rules: [], roles: [], choices: {}, overrides: {}, metrics: {},
-  sel: null, edit: null, pending: null, history: [], future: [], seq: 0, scope: 'all', tool: 'move',
+  results: {}, rules: [], roles: [], roleMap: {}, choices: {}, overrides: {}, metrics: {},
+  sel: null, edit: null, pending: null, history: [], future: [], seq: 0, scope: 'frame', tool: 'move',
 };
 const App = { painters: [], paint(what) { for (const p of this.painters) p(what); } };
 
@@ -60,7 +60,7 @@ const niceRole = r => ({ cta: 'CTA', hero: 'Product image' }[r] || (r ? r[0].toU
 const lowerRole = r => (r === 'cta' ? 'CTA' : niceRole(r).toLowerCase());
 function elName(e) {
   if (!e) return '';
-  if (e.type === 'image') return 'Product image';
+  if (e.type === 'image') return roleOf(e) === 'background' ? 'Photo' : 'Product image';
   if (e.type === 'logo' && e.src) return 'Logo';
   const t = (e.text || '').trim();
   return t ? `${niceRole(roleOf(e))} · ${t.length > 22 ? t.slice(0, 21) + '…' : t}` : niceRole(roleOf(e));
@@ -138,14 +138,20 @@ const save = debounce(async () => {
   } catch (e) { $('save-state').textContent = 'Not saved'; toast('Could not save: ' + e.message, { error: true }); }
 }, 600);
 
-function ensureBrand(d) { d.brand = Object.assign({}, R.DEFAULT_BRAND, d.brand || {}); return d; }
+/** Projects keep their design in the engine's graph format; older studio designs are converted once. */
+async function toGraph(d) {
+  if (d && Array.isArray(d.nodes)) return d;
+  return (await api('/convert', 'POST', { design: d })).design;
+}
+const textNodes = d => (d?.nodes || []).filter(n => n.type === 'text');
+function mainFont(d) { const t = textNodes(d)[0]; return (t && t.style && t.style.fontFamily) || 'Inter'; }
 async function uniqueName(name) {
   try { const names = new Set((await api('/projects')).map(p => p.name)); name = name.replace(/ \d+$/, ''); let n = name, i = 2; while (names.has(n)) n = `${name} ${i++}`; return n; }
   catch { return name; }
 }
 async function newProject(design, { name = 'Untitled campaign', assets = {}, state = null, rules = [] } = {}) {
   S.campaign = 'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  S.name = await uniqueName(name); S.design = ensureBrand(design); S.assets = assets;
+  S.name = await uniqueName(name); S.design = await toGraph(design); S.assets = assets;
   S.custom = state?.custom || []; S.selected = new Set(state?.selected || DEFAULT_SELECTED);
   S.choices = state?.choices || {}; S.overrides = state?.overrides || {}; S.history = []; S.future = []; S.results = {}; S.metrics = {}; S.sel = null;
   for (const r of rules) { try { await api('/rules', 'POST', { campaign: S.campaign, rule: { type: r.type, params: r.params, label: r.label || '', source: r.source || 'manual', evidence: r.evidence || {} } }); } catch { /* skip invalid */ } }
@@ -155,14 +161,14 @@ async function newProject(design, { name = 'Untitled campaign', assets = {}, sta
 async function openProject(campaign) {
   try {
     const p = await api('/project?campaign=' + encodeURIComponent(campaign));
-    S.campaign = campaign; S.name = p.name; S.design = ensureBrand(p.design); S.assets = p.assets || {};
+    S.campaign = campaign; S.name = p.name; S.design = await toGraph(p.design); S.assets = p.assets || {};
     const st = p.state || {};
     S.custom = st.custom || []; S.selected = new Set(st.selected || DEFAULT_SELECTED); S.choices = st.choices || {}; S.overrides = st.overrides || {};
     S.history = []; S.future = []; S.results = {}; S.metrics = {}; S.sel = null;
     enterEditor();
   } catch (e) { toast('Could not open campaign: ' + e.message, { error: true }); }
 }
-async function startTemplate(id = 'coffee_ad', extra = {}) {
+async function startTemplate(id = 'snow_cabins', extra = {}) {
   try {
     const [d, list] = await Promise.all([api('/example?name=' + id), api('/templates')]);
     const t = list.find(x => x.id === id);
@@ -199,45 +205,52 @@ async function doRefresh() {
   if (!formats.length) { S.results = {}; App.paint('all'); return; }
   busy(true);
   try {
-    const r = await api('/transform-batch', 'POST', { campaign: S.campaign, design: S.design, targets: formats.map(f => ({ width: f.width, height: f.height, name: f.key })) });
+    const r = await api('/adapt', 'POST', { design: GV.resolved(S.design, S.assets), targets: formats.map(f => ({ width: f.width, height: f.height, name: f.key })) });
     if (seq !== S.seq) return;
-    S.results = {}; r.formats.forEach(x => { S.results[x.target.name] = x; });
-    S.rules = r.rules; S.roles = r.roles;
+    S.results = {}; r.results.forEach(x => { S.results[x.name] = asResult(x); });
+    S.roleMap = r.roles || {}; S.rules = []; S.roles = [...new Set(Object.values(S.roleMap))];
     App.paint('all');
   } catch (e) { toast(e.message, { error: true }); }
   finally { if (seq === S.seq) busy(false); }
+}
+/** One engine result as the Studio's layout options: the engine's choice first, then the layouts it also tried. */
+function asResult(x) {
+  const opt = (label, r) => ({ strategy: label, design: r.design, reasons: r.reasons || [], checks: r.checks || {}, score: r.score || {} });
+  const first = opt(x.layout_label || 'Chameleon layout', x);
+  return { candidates: [first, ...(x.alternatives || []).map(a => opt(a.label, a))], baseline: x.baselines, tier: x.tier, tier_name: x.tier_name };
 }
 function chosen(key) {
   const res = S.results[key]; if (!res) return null;
   return res.candidates.find(c => c.strategy === S.choices[key]) || res.candidates[0];
 }
-function display(key) {
-  const c = chosen(key); if (!c) return null;
-  const d = clone(c.design); d.brand = S.design.brand;
-  const ov = S.overrides[key] || {};
-  for (const e of d.elements) if (ov[e.id]) Object.assign(e, ov[e.id]);
-  return d;
+/** What a frame shows: the chosen layout's graph (base) plus the editable items with this frame's tweaks. */
+function displayOf(c, key) {
+  const g = GV.withSrc(clone(c.design), S.design, S.assets);
+  const base = GV.items(g, S.roleMap), els = clone(base);
+  const ov = (key && S.overrides[key]) || {};
+  for (const e of els) if (ov[e.id]) Object.assign(e, ov[e.id]);
+  return { canvas: { width: g.page.width, height: g.page.height }, elements: els, base: g, baseItems: base };
 }
-function baseline(key) { const res = S.results[key]; if (!res) return null; const d = clone(res.baseline.design); d.brand = S.design.brand; return d; }
+function display(key) { const c = chosen(key); return c ? displayOf(c, key) : null; }
 
 /** Issues for a frame. Text size is checked against what was actually drawn (S.metrics), not the server estimate. */
 function issuesOf(key, cand) {
   const c = cand || chosen(key); if (!c) return [];
-  const d = cand ? c.design : display(key), byId = Object.fromEntries((d?.elements || []).map(e => [e.id, e]));
+  const d = cand ? displayOf(c) : display(key), byId = Object.fromEntries((d?.elements || []).map(e => [e.id, e]));
   const out = [], seen = new Set();
   const add = (type, text, id) => { const k = type + text; if (!seen.has(k)) { seen.add(k); out.push({ type, text, id }); } };
-  for (const v of c.violations) {
-    if (v.type === 'TEXT_TOO_SMALL') continue;
-    if (v.type === 'OVERLAP') add(v.type, `${elName(byId[v.elements[0]])} overlaps ${elName(byId[v.elements[1]])}`, v.elements[0]);
-    else if (v.type === 'OUT_OF_BOUNDS') add(v.type, `${elName(byId[v.element])} is outside the frame`, v.element);
-    else if (v.type === 'MISSING_REQUIRED') add(v.type, `${elName(byId[v.element])} is missing`, v.element);
-    else if (v.type === 'UNSATISFIED_RULE') add(v.type, v.rule ? `Rule not met: ${v.rule}` : `Order rule not met for ${elName(byId[v.element])}`, v.element);
-  }
-  const m = cand ? null : S.metrics[key];
-  for (const e of d?.elements || []) {
-    if (e.hidden || e.width <= 0 || !['text', 'button', 'logo'].includes(e.type) || (e.type === 'logo' && e.src)) continue;
-    const fs = m && m[e.id] != null ? m[e.id] : e.fontSize;
-    if (fs && fs < 11.95) add('TEXT_TOO_SMALL', `${elName(e)} is ${Math.round(fs * 10) / 10}px (under 12px)`, e.id);
+  // the engine's checks name graph nodes: map a button's shape or label to the button the designer sees
+  const owner = {};
+  for (const n of c.design.nodes) if (n.type === 'group') for (const k of n.children || []) owner[k] = n.id;
+  const name = id => elName(byId[owner[id] || id]) || 'An element';
+  const ch = c.checks || {};
+  for (const [a, b] of ch.overlaps || []) add('OVERLAP', `${name(a)} overlaps ${name(b)}`, owner[a] || a);
+  for (const id of ch.off_canvas || []) add('OUT_OF_BOUNDS', `${name(id)} is outside the frame`, owner[id] || id);
+  for (const id of ch.small_text || []) add('TEXT_TOO_SMALL', `${name(id)} is under 12px`, owner[id] || id);
+  for (const id of ch.low_contrast || []) add('LOW_CONTRAST', `${name(id)} is hard to read on its background`, owner[id] || id);
+  if (!cand) {   // a frame-only tweak can push something off the frame
+    const W = d.canvas.width, H = d.canvas.height;
+    for (const e of d.elements) if (!e.hidden && e.type !== 'decoration' && (e.x < -1 || e.y < -1 || e.x + e.width > W + 1 || e.y + e.height > H + 1)) add('OUT_OF_BOUNDS', `${elName(e)} is outside the frame`, e.id);
   }
   return out;
 }
@@ -312,15 +325,8 @@ function clearOverrides(key) { const before = snapshot(); delete S.overrides[key
 /* ───────── direct-manipulation edit flow ───────── */
 function beginEdit(kind, key, id) { const base = display(key); S.edit = { kind, key, id, before: clone(base), after: clone(base) }; }
 function cancelEdit(repaint = true) { S.edit = null; S.pending = null; hideNoticed(); if (repaint) App.paint('canvas'); }
-async function inferEdit() {
-  const e = S.edit; if (!e) return;
-  busy(true);
-  try {
-    const r = await api('/infer-edit', 'POST', { before: e.before, after: e.after, moved_id: e.id, kind: e.kind });
-    showNoticed(r.proposals, 'learn');
-  } catch (err) { toast(err.message, { error: true }); cancelEdit(); }
-  finally { busy(false); }
-}
+/** A drag or nudge on the canvas is a tweak to that frame only (the other sizes keep their own layout). */
+async function inferEdit() { if (S.edit) keepNoticedForFrame(); }
 function describe(p) {
   const n = activeFormats().length;
   if (p.type === 'hide_small') {
@@ -361,11 +367,12 @@ async function saveNoticedRule() {
 function keepNoticedForFrame() {
   const E = S.edit; if (!E) return;
   const t = E.after.elements.find(x => x.id === E.id);
-  const patch = { x: t.x, y: t.y, width: t.width, height: t.height, align: t.align, hidden: !!t.hidden };
+  const patch = { x: t.x, y: t.y, width: t.width, height: t.height, hidden: !!t.hidden };
+  if (t.align) patch.align = t.align;
   if (t.fontSize) patch.fontSize = t.fontSize;
   cancelEdit(false);
-  setOverride(E.key, E.id, patch, 'frame tweak');
-  toast(`Kept for ${fmt(E.key).name} only`, { action: 'Undo', onAction: undo });
+  setOverride(E.key, E.id, patch, E.kind === 'resize' ? 'resize' : 'move');
+  toast(`Changed in ${fmt(E.key).name} only. The other sizes keep their own layout.`, { action: 'Undo', onAction: undo });
 }
 $('noticed-all').onclick = saveNoticedRule;
 $('noticed-one').onclick = keepNoticedForFrame;
@@ -463,17 +470,35 @@ function classify(info, file) {
   if (/logo|brand|mark/i.test(file.name)) return 'logo';
   return 'hero';
 }
+/** The design's main photo (the biggest picture that isn't the logo) and its logo node. */
+function photoNode(d = S.design) {
+  const imgs = d.nodes.filter(n => n.type === 'image' && (S.roleMap[n.id] || n.role) !== 'logo');
+  return imgs.sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3])[0] || null;
+}
+function logoNode(d = S.design) { return d.nodes.find(n => (S.roleMap[n.id] || n.role) === 'logo') || null; }
 async function useImage(info, kind, { quiet } = {}) {
   const before = snapshot();
   const id = kind + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  let target = kind === 'hero' ? S.design.elements.find(e => e.type === 'image') : S.design.elements.find(e => e.type === 'logo');
+  let target = kind === 'hero' ? photoNode() : logoNode();
   if (!target) {
-    target = { id: kind === 'hero' ? 'hero' : 'logo', type: kind === 'hero' ? 'image' : 'logo', x: 0, y: 0, width: 200, height: 200, genome: null };
-    S.design.elements.push(target);
+    const W = S.design.page.width, H = S.design.page.height;
+    target = kind === 'hero' ? { id: 'photo', type: 'image', role: 'hero', box: [0, 0, W, H * .5], z: 0 }
+                             : { id: 'logo', type: 'image', role: 'logo', box: [W * .06, W * .06, W * .2, W * .08], z: 99 };
+    S.design.nodes.push(target);
   }
   if (target.src && target.src.startsWith('asset:')) delete S.assets[target.src.slice(6)];
-  S.assets[id] = info.url; target.src = 'asset:' + id;
-  if (kind === 'logo') { target.height = 80; target.width = Math.round(80 * info.w / info.h); }
+  S.assets[id] = info.url;
+  if (kind === 'logo') {
+    // a text logo becomes the uploaded picture, as tall as the text was, in the picture's own shape
+    const [x, y, , h] = target.box, hh = Math.max(h, 24);
+    if (target.type === 'text') { target._text = { text: target.text, style: target.style }; delete target.text; delete target.style; target.type = 'image'; }
+    target.role = 'logo'; target.box = [x, y, Math.round(hh * info.w / info.h), hh];
+  } else {
+    // a new photo: let the engine find its subject and frame it at every size
+    delete target.crop; delete target.subject;
+    target.meta = { ...(target.meta || {}), label: 'your photo' }; delete target.meta.focus; delete target.meta.art;
+  }
+  target.src = 'asset:' + id;
   recordDesignChange(kind === 'hero' ? 'product image' : 'logo', before);
   App.paintAssets?.(); refresh(); save();
   if (!quiet) toast(kind === 'hero' ? 'Product image applied to every frame' : 'Logo applied to every frame',
@@ -485,24 +510,24 @@ async function useUpload(file, kind) {
 }
 async function removeAsset(kind) {
   const before = snapshot();
-  const t = kind === 'hero' ? S.design.elements.find(x => x.type === 'image') : S.design.elements.find(x => x.type === 'logo');
-  if (!t || !t.src) return;
-  delete S.assets[t.src.slice(6)]; t.src = null;
-  if (kind === 'logo') { t.width = 260; t.height = 70; t.text = t.text || 'YOUR BRAND'; }
+  const t = kind === 'hero' ? photoNode() : logoNode();
+  if (!t || !t.src || !t.src.startsWith('asset:')) return;
+  delete S.assets[t.src.slice(6)]; delete t.src;
+  if (kind === 'logo' && t._text) { t.type = 'text'; t.text = t._text.text; t.style = t._text.style; delete t._text; }
   recordDesignChange(kind === 'hero' ? 'remove image' : 'remove logo', before); App.paintAssets?.(); refresh(); save();
 }
 
 /* ───────── export ───────── */
 async function preload() {
   await Promise.all(Object.values(S.assets).map(src => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = src; })));
-  try { await document.fonts.load(`800 40px "${S.design.brand.font}"`); } catch { /* fallback font */ }
+  try { await document.fonts.load(`800 40px "${mainFont(S.design)}"`); } catch { /* fallback font */ }
   const c = document.createElement('canvas');
-  for (const f of activeFormats()) { const d = display(f.key); if (d) R.draw(c, d, { assets: S.assets, scale: .05, css: false }); }
+  for (const f of activeFormats()) { const d = display(f.key); if (d) GV.draw(c, d, { scale: .05, dpr: 1, css: false }); }
   await new Promise(r => setTimeout(r, 60));
 }
 function renderBlob(key) {
   const d = display(key), c = document.createElement('canvas');
-  R.draw(c, d, { assets: S.assets, scale: 1, dpr: 1, css: false, maxPixels: 8192 });
+  GV.draw(c, d, { scale: 1, dpr: 1, css: false });
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
 function download(blob, name) { const u = URL.createObjectURL(blob), a = el('a', { href: u, download: name }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 2000); }
@@ -514,8 +539,7 @@ async function exportZip() {
     const files = [];
     for (const f of formats) files.push({ name: `${slug(S.name)}_${slug(f.name)}_${f.width}x${f.height}.png`, data: new Uint8Array(await (await renderBlob(f.key)).arrayBuffer()) });
     const manifest = { campaign: S.name, exported: new Date().toISOString(),
-      formats: formats.map(f => ({ name: f.name, width: f.width, height: f.height, layout: chosen(f.key)?.strategy, warnings: issuesOf(f.key).map(i => i.text), frameTweaks: Object.keys(S.overrides[f.key] || {}).length })),
-      rules: S.rules.filter(r => r.enabled).map(r => r.label) };
+      formats: formats.map(f => ({ name: f.name, width: f.width, height: f.height, layout: chosen(f.key)?.strategy, warnings: issuesOf(f.key).map(i => i.text), frameTweaks: Object.keys(S.overrides[f.key] || {}).length })) };
     files.push({ name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
     download(window.ChameleonZip.makeZip(files), `${slug(S.name)}-${formats.length}-formats.zip`);
     toast(`Exported ${formats.length} PNGs in one ZIP. Check your Downloads folder.`);
@@ -529,9 +553,8 @@ async function exportPng(key) {
   toast(`Exported ${f.name} as PNG`);
 }
 function exportJson() {
-  const data = { chameleon: 'project', version: 3, name: S.name, design: S.design, assets: S.assets,
-    state: { selected: [...S.selected], custom: S.custom, choices: S.choices, overrides: S.overrides },
-    rules: S.rules.map(r => ({ type: r.type, params: r.params, label: r.label, source: r.source, evidence: r.evidence, enabled: r.enabled })) };
+  const data = { chameleon: 'project', version: 4, name: S.name, design: S.design, assets: S.assets,
+    state: { selected: [...S.selected], custom: S.custom, choices: S.choices, overrides: S.overrides } };
   download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `${slug(S.name)}.chameleon.json`);
   toast('Project file downloaded');
 }
@@ -539,11 +562,10 @@ async function importJsonFile(f) {
   try {
     if (f.size > 25e6) throw Error('Choose a file under 25 MB.');
     const data = JSON.parse(await f.text());
-    if (data.chameleon === 'project') await newProject(data.design, { name: data.name, assets: data.assets || {}, state: data.state, rules: data.rules || [] });
-    else if (data.canvas && Array.isArray(data.elements)) {
-      await api('/transform', 'POST', { design: data, target: { width: 1080, height: 1080 }, campaign: 'import-check' });
-      await newProject(data, { name: f.name.replace(/\.json$/i, '') });
-    } else throw Error('This isn’t a Chameleon design or project file. A design needs “canvas” and “elements”.');
+    if (data.chameleon === 'project') await newProject(data.design, { name: data.name, assets: data.assets || {}, state: data.state });
+    else if (Array.isArray(data.nodes) || (data.canvas && Array.isArray(data.elements))) {
+      await newProject(await toGraph(data), { name: data.name || f.name.replace(/\.json$/i, '') });
+    } else throw Error('This isn’t a Chameleon design or project file.');
   } catch (err) { toast('Could not open: ' + err.message, { error: true, ms: 7000 }); }
 }
 
@@ -587,15 +609,21 @@ registerMenu('main-menu-btn', 'main-menu', async () => {
     mi(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', document.documentElement.dataset.theme === 'dark' ? 'Light theme' : 'Dark theme', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')),
     mi('play', 'Product tour', () => App.startTour?.(0)), mi('book', 'Feature guides…', () => App.openGuides?.()),
     mi('keyboard', 'Keyboard shortcuts', () => $('shortcuts').showModal(), '?'),
-    mi('grid', 'Transfer benchmark', runBench),
+    mi('target', 'How it thinks (X-ray)', () => $('think-btn').click()),
     el('div', { class: 'menu-sep' }),
-    mi('trash', 'Delete this campaign…', async () => { if (!confirm(`Delete “${S.name}” and its rules? This can’t be undone.`)) return; await api('/project?campaign=' + S.campaign, 'DELETE'); showHome(); }),
+    mi('trash', 'Delete this campaign…', async () => { if (!confirm(`Delete “${S.name}”? This can’t be undone.`)) return; await api('/project?campaign=' + S.campaign, 'DELETE'); showHome(); }),
   );
 });
 registerMenu('export-menu-btn', 'export-menu');
 $('export-menu').addEventListener('click', e => { const b = e.target.closest('[data-export]'); if (!b) return; closeMenus(); ({ zip: exportZip, png: () => exportPng(), json: exportJson })[b.dataset.export](); });
 $('export-all').onclick = exportZip;
 $('undo').onclick = undo; $('redo').onclick = redo;
+/** Open the X-ray ("how it thinks") on this campaign's design, in a new tab. */
+$('think-btn').onclick = () => {
+  try { localStorage.setItem('chameleon.xray.design', JSON.stringify({ ...GV.resolved(S.design, S.assets), name: S.name })); }
+  catch { return toast('This design is too big to hand over to the X-ray. Use Export → project file and import it there.', { error: true }); }
+  window.open('/xray#from=studio', '_blank', 'noopener');
+};
 $('sc-close').onclick = () => $('shortcuts').close();
 $('bench-close').onclick = () => $('bench').close();
 $('project-name').addEventListener('change', e => { S.name = e.target.value.trim() || 'Untitled campaign'; e.target.value = S.name; document.title = `${S.name} · Chameleon`; save(); });

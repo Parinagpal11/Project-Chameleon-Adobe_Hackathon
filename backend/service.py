@@ -11,11 +11,10 @@ from engine.intent import infer_any, relation
 from engine import rules as R
 
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATES = {
-    'coffee_ad': {'name': 'Roast & Co. — Spring launch', 'description': 'Café promo with an offer and shop button'},
-    'sneaker_drop': {'name': 'Stride — Night drop', 'description': 'Dark sneaker launch with early-access CTA'},
-    'saas_webinar': {'name': 'Northwind — Webinar', 'description': 'B2B webinar invite with legal line'},
-}
+# Starter templates: graph designs with real photos (examples/templates). The older studio samples stay in
+# examples/ for importing, but new campaigns start from these.
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / 'examples' / 'templates'
+TEMPLATES = json.loads((TEMPLATE_DIR / 'index.json').read_text()) if (TEMPLATE_DIR / 'index.json').is_file() else {}
 
 
 def campaign_key(value):
@@ -270,9 +269,22 @@ def get_project(campaign):
     return {'campaign': campaign, 'name': row[0], **json.loads(row[1]), 'updated': row[2]}
 
 
+def _valid_design(design):
+    """A project's design: the graph format (checked by loading it) or the older studio format."""
+    from engine.graph import load
+    if isinstance(design, dict) and 'nodes' in design:
+        nodes = design.get('nodes')
+        if isinstance(nodes, list) and len(nodes) > MAX_NODES:
+            raise ValueError(f'Designs are limited to {MAX_NODES} nodes')
+        load(design)
+        return design
+    from models import Design
+    return Design.model_validate(design).model_dump()
+
+
 def save_project(campaign, req):
     campaign_key(campaign)
-    data = {'design': req.design.model_dump(), 'formats': [f.model_dump() for f in req.formats],
+    data = {'design': _valid_design(req.design), 'formats': [f.model_dump() for f in req.formats],
             'assets': req.assets, 'state': req.state}
     with database() as conn:
         conn.execute('INSERT OR REPLACE INTO projects VALUES (?,?,?,?)', (campaign, req.name or campaign, json.dumps(data), time.time()))
@@ -386,6 +398,21 @@ def adapt_request(data):
     targets = _clean_targets(data.get('targets'))
     try:
         return adapt(design, targets)
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f'Malformed design: missing or wrong field {exc}')
+
+
+def convert_request(data):
+    """An older studio design (canvas + elements) as a chameleon-graph/1 design; a graph is returned as is."""
+    from engine.graph import load
+    if not isinstance(data, dict) or not isinstance(data.get('design'), dict):
+        raise ValueError('Send {"design": {...}}')
+    design = data['design']
+    items = design.get('nodes') if 'nodes' in design else design.get('elements')
+    if isinstance(items, list) and len(items) > MAX_NODES:
+        raise ValueError(f'Designs are limited to {MAX_NODES} nodes')
+    try:
+        return {'design': load(design).to_json()}
     except (KeyError, TypeError) as exc:
         raise ValueError(f'Malformed design: missing or wrong field {exc}')
 

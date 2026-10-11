@@ -119,7 +119,7 @@ class RuleTests(unittest.TestCase):
         self.assertGreater(els['cta'].x, els['headline'].x + els['headline'].width * .5)
 
     def test_projects_round_trip(self):
-        service.save_project('proj', ProjectSave(name='Spring', design=self.design, formats=[{'width': 1080, 'height': 1080, 'name': 'Square'}]))
+        service.save_project('proj', ProjectSave(name='Spring', design=self.design.model_dump(), formats=[{'width': 1080, 'height': 1080, 'name': 'Square'}]))
         p = service.get_project('proj'); self.assertEqual(p['name'], 'Spring'); self.assertEqual(p['formats'][0]['name'], 'Square')
         self.assertEqual(service.list_projects()[0]['campaign'], 'proj')
         service.delete_project('proj')

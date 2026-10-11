@@ -26,7 +26,7 @@
     <a class="brand" href="/" aria-label="Chameleon home"><span class="brand-mark" aria-hidden="true"></span><span>chameleon</span></a>
     <div class="home-top-actions">
       <button class="btn ghost sm" id="silk-toggle" type="button" aria-pressed="true" title="Pause or play the background animation">Pause motion</button>
-      <a class="btn ghost xray-link" href="/xray" title="See what the engine understands about a design" aria-label="Engine X-ray"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>Engine X-ray</span></a>
+      <a class="btn ghost xray-link" href="/xray" title="See what the engine understands about a design" aria-label="How Chameleon thinks"><svg class="i" aria-hidden="true"><use href="#i-target"/></svg><span>How it thinks</span></a>
       <button class="btn ghost tour-link" id="home-tour" aria-label="Product tour"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>Product tour</span></button>
       <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
     </div>
@@ -34,29 +34,29 @@
   <main class="home-main">
     <section class="home-intro">
       <div>
-        <h1>Adapt one campaign to every format.</h1>
-        <p class="muted">Lay out every social and display size at once. Fix one, and Chameleon applies the same fix to all of them.</p>
+        <h1>One design. Every size. Laid out, not cropped.</h1>
+        <p class="muted">Chameleon rebuilds your design for each format. It keeps the people and products in your photo in view, keeps text off faces, and picks the layout that fits. Adjust any size by hand.</p>
       </div>
     </section>
 
     <section class="new-row" aria-label="Start a campaign">
       <button class="new-tile" id="new-sample">
         <span class="tile-icon"><svg class="i"><use href="#i-plus"/></svg></span>
-        <span><b>New from sample</b><small>Coffee campaign, 6 formats</small></span>
+        <span><b>Try a sample</b><small>Snow cabins ad, 6 sizes</small></span>
       </button>
       <label class="new-tile drop-tile" id="home-drop" tabindex="0">
         <input type="file" id="home-files" accept="image/*,.json,application/json" multiple class="visually-hidden">
         <span class="tile-icon accent"><svg class="i"><use href="#i-upload"/></svg></span>
-        <span><b>Drop your product photo &amp; logo</b><small>We’ll sort which is which · or click to browse</small></span>
+        <span><b>Drop your photo &amp; logo</b><small>They go into a sample design · or click to browse</small></span>
       </label>
       <label class="new-tile" id="home-import">
         <input type="file" id="home-json" accept="application/json,.json" class="visually-hidden">
         <span class="tile-icon"><svg class="i"><use href="#i-file"/></svg></span>
-        <span><b>Import JSON</b><small>A Chameleon design or project file</small></span>
+        <span><b>Open a design file</b><small>Chameleon JSON (design or project)</small></span>
       </label>
-      <div class="demo-tile" aria-label="Animated example: fix one format and every format updates">
-        <div class="demo-stage" id="home-demo"></div>
-        <div class="demo-cap"><b>Fix once, update everywhere</b><button class="link" id="home-demo-tour">See how →</button></div>
+      <div class="demo-tile" aria-label="Example: one design laid out for four sizes">
+        <div class="demo-stage resize-demo" id="home-demo"></div>
+        <div class="demo-cap"><b>Rearranged for every size</b><button class="link" id="home-demo-tour">See how →</button></div>
       </div>
     </section>
 
@@ -102,19 +102,21 @@
       <div class="menu" id="main-menu" role="menu" hidden></div>
       <input id="project-name" class="project-name" aria-label="Campaign name" maxlength="80" spellcheck="false">
       <span id="save-state" class="save-state small" role="status" aria-live="polite"></span>
+      <span id="layout-status" class="layout-status small" aria-hidden="true"><i></i>Laying out every size…</span>
     </div>
     <div class="ed-right">
       <button class="icon-btn" id="undo" aria-label="Undo" title="Undo (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
       <button class="icon-btn" id="redo" aria-label="Redo" title="Redo (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
       <span class="sep" aria-hidden="true"></span>
       <button class="icon-btn theme-toggle" aria-label="Switch theme" title="Switch theme"><svg class="i only-dark"><use href="#i-sun"/></svg><svg class="i only-light"><use href="#i-moon"/></svg></button>
+      <button class="btn ghost" id="think-btn" title="See what Chameleon understands about this design (opens in a new tab)"><svg class="i"><use href="#i-target"/></svg><span class="hide-sm">How it thinks</span></button>
       <button class="btn ghost" id="tour-btn" title="Product tour"><svg class="i"><use href="#i-help"/></svg><span class="hide-sm">Tour</span></button>
       <div class="split">
         <button class="btn primary" id="export-all" aria-label="Export all frames as a ZIP of PNGs"><svg class="i"><use href="#i-download"/></svg><span class="hide-sm">Export</span><span class="badge" id="export-count">0</span></button>
         <button class="btn primary caret" id="export-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="More export options"><svg class="i"><use href="#i-chevronDown"/></svg></button>
         <div class="menu right" id="export-menu" role="menu" hidden>
-          <button role="menuitem" data-export="zip"><svg class="i"><use href="#i-download"/></svg>All frames · PNG (.zip)<kbd>⌘E</kbd></button>
-          <button role="menuitem" data-export="png"><svg class="i"><use href="#i-image"/></svg>Selected frame · PNG</button>
+          <button role="menuitem" data-export="zip"><svg class="i"><use href="#i-download"/></svg>All sizes · PNG (.zip)<kbd>⌘E</kbd></button>
+          <button role="menuitem" data-export="png"><svg class="i"><use href="#i-image"/></svg>Selected size · PNG</button>
           <button role="menuitem" data-export="json"><svg class="i"><use href="#i-file"/></svg>Project file · JSON</button>
         </div>
       </div>
@@ -150,7 +152,7 @@
   <aside id="right" class="panel right" aria-label="Inspector">
     <div class="tabs" role="tablist" aria-label="Inspector">
       <button role="tab" id="tab-design" aria-controls="pane-design" aria-selected="true">Design</button>
-      <button role="tab" id="tab-rules" aria-controls="pane-rules" aria-selected="false" tabindex="-1">Rules <span class="badge" id="rules-count">0</span></button>
+      <button role="tab" id="tab-rules" aria-controls="pane-rules" aria-selected="false" tabindex="-1" hidden>Rules <span class="badge" id="rules-count">0</span></button>
     </div>
     <section id="pane-design" role="tabpanel" aria-labelledby="tab-design" class="pane"></section>
     <section id="pane-rules" role="tabpanel" aria-labelledby="tab-rules" class="pane" hidden>
@@ -186,7 +188,7 @@
     </div>
     <button class="tool" id="zoom-in" aria-label="Zoom in" title="Zoom in · ⌘+"><svg class="i"><use href="#i-zoomIn"/></svg></button>
     <span class="sep" aria-hidden="true"></span>
-    <button class="dock-cmd" id="dock-cmd"><svg class="i"><use href="#i-wand"/></svg><span>Type a rule…</span><kbd>⌘K</kbd></button>
+    <button class="dock-cmd" id="dock-cmd" hidden><svg class="i"><use href="#i-wand"/></svg><span>Type a rule…</span><kbd>⌘K</kbd></button>
   </div>
 
   <div id="add-frame" class="popover" role="dialog" aria-label="Add frame" hidden>
@@ -230,10 +232,10 @@
       <dt><kbd>⌘</kbd> + scroll</dt><dd>Zoom</dd><dt><kbd>⇧1</kbd></dt><dd>Zoom to fit</dd><dt><kbd>⇧2</kbd></dt><dd>Zoom to selection</dd><dt><kbd>⌘0</kbd></dt><dd>Zoom to 100%</dd></dl></div>
     <div><h3>Editing</h3><dl>
       <dt><kbd>Tab</kbd></dt><dd>Next element in frame</dd><dt><kbd>←↑→↓</kbd></dt><dd>Nudge (<kbd>⇧</kbd> = 10)</dd>
-      <dt><kbd>Delete</kbd></dt><dd>Hide in this frame</dd><dt><kbd>Esc</kbd></dt><dd>Deselect / undo pending</dd>
+      <dt><kbd>Delete</kbd></dt><dd>Hide in this size</dd><dt><kbd>Esc</kbd></dt><dd>Deselect / undo pending</dd>
       <dt><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></dt><dd>Undo / redo</dd></dl></div>
     <div><h3>Campaign</h3><dl>
-      <dt><kbd>⌘K</kbd></dt><dd>Type a rule</dd><dt><kbd>⌘E</kbd></dt><dd>Export all</dd><dt><kbd>?</kbd></dt><dd>This sheet</dd></dl></div>
+      <dt><kbd>⌘E</kbd></dt><dd>Export all</dd><dt><kbd>?</kbd></dt><dd>This sheet</dd></dl></div>
   </div>
 </dialog>
 
@@ -245,6 +247,8 @@
 <script src="/assets/icons.js"></script>
 <script src="/assets/zip.js"></script>
 <script src="/assets/render.js"></script>
+<script src="/assets/graph-render.js"></script>
+<script src="/assets/studio-graph.js"></script>
 <script src="/assets/core.js"></script>
 <script src="/assets/canvas.js"></script>
 <script src="/assets/panels.js"></script>

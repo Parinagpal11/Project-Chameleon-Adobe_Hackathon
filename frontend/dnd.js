@@ -54,7 +54,7 @@
       infos.sort((a, b) => score(b) - score(a)); infos[0].kind = 'logo'; infos[1].kind = 'hero';
     }
     if (S.view === 'home') {
-      await startTemplate('coffee_ad');
+      await startTemplate('snow_cabins');
       store.set('chameleon.tour.v3', store.get('chameleon.tour.v3') || 'deferred');
     }
     for (const x of infos) await useImage(x.info, x.kind, { quiet: infos.length > 1 });

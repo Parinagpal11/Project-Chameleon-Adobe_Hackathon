@@ -4,27 +4,25 @@
   const F = (cls, inner = '', style = '') => `<div class="mf ${cls}" style="${style}">${inner}</div>`;
   const ADS = '<i class="im"></i><i class="lg"></i><i class="hd"></i><i class="hd s"></i><i class="bt"></i>';
   const CURSOR = '<svg class="cur" viewBox="0 0 24 24"><path d="M5 3l14 7-6 2-2 6z"/></svg>';
+  const PHOTO = '<i class="ph"><b class="p1"></b><b class="p2"></b><b class="dog"></b></i>';
   const STAGES = {
     canvas: () => `<div class="st st-canvas"><div class="world">${F('f1 tall', ADS)}${F('f2 sq', ADS)}${F('f3 wide', ADS)}${F('f4 ban', ADS)}</div><span class="lbl l1">Story</span><span class="lbl l2">Post</span><span class="lbl l3">Feed</span><span class="lbl l4">Banner</span>${CURSOR}</div>`,
-    teach: () => `<div class="st st-teach">${F('big sq', ADS)}${F('s1 tall', ADS)}${F('s2 wide', ADS)}${F('s3 ban', ADS)}<div class="pop"><b>Make this a rule?</b><span class="pbtn">All frames</span><span class="pbtn2">This frame</span></div>${CURSOR}</div>`,
-    scope: () => `<div class="st st-scope">${F('big sq', ADS)}${F('s1 tall', ADS)}${F('s2 wide', ADS)}<div class="pop"><b>Make this a rule?</b><span class="pbtn">All frames</span><span class="pbtn2">This frame</span></div><span class="lock">This frame only</span>${CURSOR}</div>`,
-    inspector: () => `<div class="st st-insp"><div class="panel-mock"><div class="scope-mock"><span class="a">All frames</span><span class="b">This frame</span><i class="knob"></i></div><div class="pin-mock">${'<i></i>'.repeat(9)}<b class="dot"></b></div><div class="seg-mock"><i></i><i></i><i></i><b class="segsel"></b></div><div class="step-mock"><i>−</i><span>×1.25</span><i>+</i></div></div>${F('big sq', ADS)}</div>`,
-    type: () => `<div class="st st-type"><div class="input-mock"><span class="typed">hide the offer on small banners</span><i class="caret"></i></div><div class="chip-mock">Hide offer under 200px</div>${F('s1 sq', ADS)}${F('s2 ban', ADS)}</div>`,
-    bubbles: () => `<div class="st st-bub"><div class="tray"><span class="b0">Pin top-left</span><span class="b1">Center</span><span class="b2">Bigger</span></div>${F('big sq', ADS)}<span class="fly">Pin top-right</span>${CURSOR}</div>`,
-    drop: () => `<div class="st st-drop"><div class="file f-photo"></div><div class="file f-logo"></div>${F('s1 tall', ADS)}${F('s2 sq', ADS)}${F('s3 wide', ADS)}</div>`,
     checks: () => `<div class="st st-checks"><div class="layers-mock"><i class="r">Story</i><i class="r warn">Leaderboard</i><i class="r">Post</i><i class="r">Feed</i></div><div class="opts"><b class="o o1"></b><b class="o o2"></b><b class="o o3"></b><i class="ring"></i></div></div>`,
+    framing: () => `<div class="st st-frame"><div class="big-photo">${PHOTO}<i class="fbox"></i></div>${F('s1 tall', '<i class="ph sm"><b class="dog"></b></i>')}${F('s2 wide', '<i class="ph sm"><b class="dog"></b></i>')}${F('s3 ban', '<i class="ph sm"><b class="dog"></b></i>')}${CURSOR}</div>`,
+    tweak: () => `<div class="st st-scope">${F('big sq', ADS)}${F('s1 tall', ADS)}${F('s2 wide', ADS)}<span class="lock">Only this size</span>${CURSOR}</div>`,
+    drop: () => `<div class="st st-drop"><div class="file f-photo"></div><div class="file f-logo"></div>${F('s1 tall', ADS)}${F('s2 sq', ADS)}${F('s3 wide', ADS)}</div>`,
+    xray: () => `<div class="st st-xray">${F('big sq', ADS)}<i class="xb b1"></i><i class="xb b2"></i><i class="xb b3"></i><i class="xb b4"></i><span class="xl">Subject · headline · button</span></div>`,
     export: () => `<div class="st st-export"><div class="exp-btn">Export</div>${'<i class="png p1"></i><i class="png p2"></i><i class="png p3"></i><i class="png p4"></i>'}<div class="zip">ZIP<span>6 PNGs</span></div></div>`,
   };
+  const firstFrame = () => activeFormats()[0]?.key;
   const STEPS = [
-    { stage: 'canvas', title: 'All your formats on one canvas', text: 'Every format is a frame on one canvas. Each frame is laid out for its size automatically.', try: 'Try it: scroll to pan, ⌘/Ctrl + scroll to zoom, ⇧1 to fit everything.', anchor: () => $('viewport'), spot: false },
-    { stage: 'teach', title: 'Fix one frame, teach all of them', text: 'Drag, resize or nudge any text, button or logo. Chameleon works out the rule you meant, such as “logo pinned top-right”, and offers to apply it to every frame.', try: 'Try it: drag the logo into a corner of any frame.', anchor: () => $('viewport'), spot: false },
-    { stage: 'scope', title: 'Or keep it to one frame', text: 'Choose “This frame only” for a one-off. The frame gets a lock icon, and you can reset its tweaks from the inspector.', try: 'Press Esc or Undo if you change your mind.', anchor: () => $('viewport'), spot: false },
-    { stage: 'inspector', title: 'The inspector', text: 'Select an element to pin it to a corner, align it, resize it or hide it. The switch at the top decides whether the change is a rule for all frames or a tweak for this frame.', try: 'Try it: click an element, then use the 9-dot pin picker.', anchor: () => $('right'), before: () => { App.setRightTab('design'); const k = activeFormats()[1]?.key || activeFormats()[0]?.key; const d = k && display(k); const lg = d?.elements.find(e => e.type === 'logo' || e.type === 'button'); if (lg) App.select({ key: k, id: lg.id }); } },
-    { stage: 'type', title: 'Describe a rule in plain English', text: 'Type things like “logo top-left”, “make the CTA bigger” or “hide the offer on small banners”. You can check what Chameleon understood before you add it.', try: 'Try it: press ⌘K (Ctrl+K) anywhere.', anchor: () => $('rule-form'), before: () => App.setRightTab('rules') },
-    { stage: 'bubbles', title: 'Rule bubbles', text: 'Drag a bubble onto an element to apply that rule. Or select an element and click a bubble.', try: 'Try it: drag “Pin top-right” onto a logo.', anchor: () => $('bubbles'), before: () => App.setRightTab('rules') },
-    { stage: 'drop', title: 'Drop in your brand', text: 'Drag your product photo and logo from your desktop onto the canvas. Chameleon tells them apart (transparent or wide images become the logo) and updates every frame. Drop onto the image or logo to replace just that one.', try: 'Colors, typeface and copy are under Assets.', anchor: () => $('left'), before: () => App.setLeftTab('assets') },
-    { stage: 'checks', title: 'Layers, checks and layout options', text: 'Layers lists every frame and its elements. A yellow dot means a check failed, such as overlapping elements or text under 12px. Select a frame to see what failed and to pick one of three layouts.', try: 'Try it: click a frame’s name on the canvas.', anchor: () => $('left'), before: () => App.setLeftTab('layers') },
-    { stage: 'export', title: 'Export every size at once', text: 'One click gives you a ZIP with a PNG for every frame, plus a manifest of the rules and any warnings.', try: 'Shortcut: ⌘E. Replay this tour or any single guide from the main menu.', anchor: () => $('export-all') },
+    { stage: 'canvas', title: 'Every size on one canvas', text: 'Chameleon lays out each size from your design. It rearranges the photo and text for the shape instead of cropping or stretching them.', try: 'Try it: scroll to pan, ⌘/Ctrl + scroll to zoom, ⇧1 to fit everything.', anchor: () => $('viewport'), spot: false },
+    { stage: 'checks', title: 'Why a size looks the way it does', text: 'Click a size’s name. The inspector explains what Chameleon did there and shows the other layouts it tried. Click one to use it instead.', try: 'Try it: click the name above any size.', anchor: () => $('right'), before: () => { App.setRightTab('design'); const k = firstFrame(); if (k) App.select({ key: k, id: null }); } },
+    { stage: 'framing', title: 'Tell it what matters in the photo', text: 'Photo framing applies to every size. Auto finds faces, people and products. Focus area keeps the part you mark in view. Whole photo never crops it.', try: 'Try it: choose Focus area, then drag a box on the photo.', anchor: () => $('right'), before: () => { const k = firstFrame(); if (k) App.select({ key: k, id: null }); } },
+    { stage: 'tweak', title: 'Adjust one size by hand', text: 'Drag, resize or nudge any text, button or logo. Only that size changes; the others keep their own layout. A lock marks sizes you changed, and Reset undoes it.', try: 'Try it: drag a headline, then press ⌘Z to undo.', anchor: () => $('viewport'), spot: false },
+    { stage: 'drop', title: 'Use your own photo and logo', text: 'Drop your photo and logo onto the canvas. Chameleon tells them apart and finds the subject in your photo, then lays out every size again.', try: 'Text and typeface are under Assets.', anchor: () => $('left'), before: () => App.setLeftTab('assets') },
+    { stage: 'xray', title: 'See how it thinks', text: 'How it thinks opens the X-ray: what Chameleon recognised in your design (the photo’s subject, the headline, the button, the reading order) and how each size scores.', try: 'It opens in a new tab, so your work stays here.', anchor: () => $('think-btn') },
+    { stage: 'export', title: 'Export every size at once', text: 'One click gives you a ZIP with a PNG for every size, plus a list of any warnings.', try: 'Shortcut: ⌘E. Replay this tour from the main menu.', anchor: () => $('export-all') },
   ];
   App.TOUR_STEPS = STEPS;
 
@@ -34,7 +32,7 @@
     host.innerHTML = STAGES[name]();
     host.classList.toggle('still', REDUCED.matches || paused);
   }
-  App.mountDemo = (host, name = 'teach') => { host.innerHTML = STAGES[name](); host.classList.add('tour-stage', 'mini'); if (REDUCED.matches) host.classList.add('still'); };
+  App.mountDemo = (host, name = 'canvas') => { host.innerHTML = STAGES[name](); host.classList.add('tour-stage', 'mini'); if (REDUCED.matches) host.classList.add('still'); };
 
   function show(i) {
     idx = i; const s = STEPS[i];

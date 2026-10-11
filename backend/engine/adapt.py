@@ -905,15 +905,15 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
         crops[nid] = c['kept'] if sub.get('source') == 'whole' else \
             min(1.0, c['kept'] / max(sub.get('kept') or 1.0, 1e-6))      # 'keep whole' means the whole image
         src = sub.get('source')
-        what = 'your focus area' if src == 'focus' else 'its subject'
+        what = {'focus': 'your focus area', 'faces': 'the faces', 'people': 'the people'}.get(src, 'the main subject')
+        plural = src in ('faces', 'people')
         if src == 'whole':
             if c['kept'] < .999:
                 reasons.append(f"Only {c['kept'] * 100:.0f}% of the photo fits this shape.")
         elif src != 'assumed' and c['kept'] >= .999:
-            reasons.append(f"Photo cropped around {what} ({src}): 100% kept." if src != 'focus'
-                           else f"Photo cropped around {what}: 100% kept.")
+            reasons.append(f"Photo cropped so {what} {'stay' if plural else 'stays'} fully in view.")
         elif src != 'assumed':
-            reasons.append(f"Photo cropped around {what}: {c['kept'] * 100:.0f}% kept (the rest doesn't fit this shape).")
+            reasons.append(f"Photo cropped around {what}; {c['kept'] * 100:.0f}% of {'them' if plural else 'it'} fits this shape.")
     _logos_off_subjects(out, a, W, H, reasons)
     nodes = [out[n['id']] for n in design['nodes']]
     for n in nodes:      # photos are not repeated per size: the client re-attaches them by id
@@ -1006,10 +1006,10 @@ def _adapt_one(design: dict, g, a: dict, target: dict, base_overlaps: set = froz
             elif same:
                 kept_msg = 'Original size: layout kept, with what breaks a rule here fixed (text raised to 12 px, nothing off the canvas).'
             else:
-                kept_msg = 'Layout kept: every element stays anchored to the edges it hugs; text re-wraps in its own lane.'
+                kept_msg = 'Layout kept: each element stays near the edge it was on, and text re-wraps to fit.'
             reasons = [head, kept_msg]
             if abs(res['k'] - s) / max(s, 1e-6) > .03:
-                reasons.append(f"Type scaled {res['k'] / s * 100:.0f}% of a plain resize so it fills the new shape.")
+                reasons.append(f"Text set {'larger' if res['k'] > s else 'smaller'} than a plain resize ({res['k'] / s * 100:.0f}%) so it fills the new shape.")
             res['reasons'] = list(dict.fromkeys(reasons + res['reasons']))
             res.pop('k')
             res.pop('exact', None)
@@ -1085,7 +1085,7 @@ def _fill_variants(res: dict, design: dict, g, a: dict, W: float, H: float, head
     chosen, best, first = _best_of(cands, design, a, .2)
     if chosen is not res:
         chosen['reasons'] = list(dict.fromkeys(chosen['reasons'] + [
-            f"{FILL_LABEL[chosen['_args']['fill']]} fills the empty space better ({best[2]['overall']:.0f} vs {first[2]['overall']:.0f})."]))
+            f"{FILL_LABEL[chosen['_args']['fill']]} fills the empty space better."]))
     seen = {lab for lab in (x['label'] for x in chosen.get('alternatives', []))}
     chosen['alternatives'] = chosen.get('alternatives', []) + [x for x in old if x['label'] not in seen and x['design'] is not chosen['design']]
     return chosen
@@ -1264,7 +1264,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                 photo_region = Box(x0, 0 if bleed else m, tw, H if bleed else H - 2 * m)
                 copy_region = Box(photo_region.r + m, m, W - photo_region.r - 2 * m, H - 2 * m) if left else \
                     Box(m, m, photo_region.x - 2 * m, H - 2 * m)
-                reasons.append('Extreme wide canvas: photo becomes a thumbnail at the ' + ('left.' if left else 'right.'))
+                reasons.append('On a banner this wide the photo becomes a small picture at the ' + ('left.' if left else 'right.'))
         elif horizontal:
             left = hb.cx < g.width / 2
             frac = min(.55, max(.38, hb.w / g.width if a['style']['structure'] == 'split-horizontal' else .45))
@@ -1304,7 +1304,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
                     photo_region = Box(photo_region.r - nw, photo_region.y, nw, photo_region.h)
                     copy_region = Box(copy_region.x, copy_region.y, photo_region.x - m - copy_region.x, copy_region.h)
             if a['style']['structure'] != 'split-horizontal':
-                reasons.append('Photo and copy re-flowed side by side for the wider canvas.')
+                reasons.append('Photo and copy placed side by side for the wider shape.')
         else:
             top = not (hb.cy > g.height * .6 and a['style']['structure'] == 'stacked')
             frac = .34 if tier == 3 else min(.55, max(.38, hb.h / g.height if a['style']['structure'] == 'stacked' else .45))
@@ -1333,7 +1333,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             copy_region = Box(m, photo_region.b + m, W - 2 * m, H - photo_region.b - 2 * m) if top else \
                 Box(m, m, W - 2 * m, photo_region.y - 2 * m)
             if a['style']['structure'] == 'split-horizontal':
-                reasons.append('Photo and copy re-flowed from side by side to stacked for the taller canvas.')
+                reasons.append('Photo and copy stacked for the taller shape.')
         if photo_region and not bleed:
             # a cut-out product or a framed photo keeps roughly its own shape: shrink the slot instead of cropping
             ha = hb.w / max(1.0, hb.h)
@@ -1731,9 +1731,9 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
     if dropped:
         reasons.append('Dropped to make room: ' + ', '.join(dict.fromkeys(dropped)) + '.')
     if k > s * 1.05:
-        reasons.append(f"Type set {k / s * 100:.0f}% of a plain resize so it reads well at this size.")
+        reasons.append(f"Text set larger than a plain resize ({k / s * 100:.0f}%) so it reads well at this size.")
     elif k < s * .95:
-        reasons.append(f"Type set {k / s * 100:.0f}% of a plain resize so everything fits (never under 12 px).")
+        reasons.append(f"Text set smaller than a plain resize ({k / s * 100:.0f}%) so everything fits, never under 12 px.")
     reps = [it for it in allitems if isinstance(it, RepeatItem)]
     for it in reps:
         if len(it.cards) < it.total:
@@ -1973,4 +1973,5 @@ def adapt(design: dict, targets: list[dict]) -> dict:
         a['_orig_under'] = min(a['_orig_under'], .1)
     return {'source': {'width': g.width, 'height': g.height},
             'analysis_notes': a['notes'],
+            'roles': {k: v['role'] for k, v in a['roles'].items()},
             'results': [adapt_one(src, g, a, t, base_overlaps) for t in targets]}
