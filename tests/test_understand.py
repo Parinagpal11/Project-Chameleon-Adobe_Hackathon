@@ -315,7 +315,7 @@ class SubjectTests(unittest.TestCase):
 
     def test_never_reads_local_files(self):
         node = load({'format': 'chameleon-graph/1', 'page': {'width': 10, 'height': 10},
-                     'nodes': [{'id': 'p', 'type': 'image', 'box': [0, 0, 10, 10], 'src': str(ROOT / 'previews' / 'v3-home.png')}]}).by_id['p']
+                     'nodes': [{'id': 'p', 'type': 'image', 'box': [0, 0, 10, 10], 'src': str(ROOT / 'tests' / 'fixtures' / 'photos' / 'user-hiker-lake.jpg')}]}).by_id['p']
         self.assertEqual(subject.find_subject(node)['source'], 'assumed')
 
     def test_fallback_without_pixels(self):

@@ -39,18 +39,6 @@ def _pairs_kept(order_a: list, order_b: list) -> float:
     return good / n if n else 1.0
 
 
-def _visual_order(boxes: dict) -> list:
-    """Reading order of a laid-out design: rows top to bottom, left to right inside a row (Z pattern)."""
-    items = sorted(boxes.items(), key=lambda kv: (kv[1].y, kv[1].x))
-    rows: list[list] = []
-    for gid, b in items:
-        if rows and b.y < max(r[1].cy for r in rows[-1]):
-            rows[-1].append((gid, b))
-        else:
-            rows.append([(gid, b)])
-    return [gid for row in rows for gid, _ in sorted(row, key=lambda kv: kv[1].x)]
-
-
 def largest_empty(boxes: list, W: float, H: float, n: int = 48) -> float:
     """Share of the canvas taken by the biggest empty rectangle (no photo, text or shape in it), on an n x n grid."""
     occ = [[False] * n for _ in range(n)]
@@ -100,7 +88,7 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
     leaves empty bars (frame = share of the canvas covered). Chameleon's output is drawn 1:1 (photos are
     cropped, never stretched), so it is scored with 1.0 for both.
     `subject_kept` is None only when the original has no photo subject; a dropped photo is 0."""
-    from .adapt import drawn_size, contrast, ink, backdrop, MIN_TEXT, subject_boxes
+    from .adapt import drawn_size, contrast, ink, backdrop, MIN_TEXT
     W, H = float(design['page']['width']), float(design['page']['height'])
     canvas = Box(0, 0, W, H)
     roles = {k: v['role'] for k, v in a['roles'].items()}
@@ -208,7 +196,6 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
         bs = [Box.of(out[m]['box']) for m in gr['members'] if m in out and shown(m, False) > 0]
         if bs:
             nb[gr['id']] = Box.bound(bs)
-    present_share = len(nb) / len(groups) if groups else 1.0
     from .understand import reading_order
     # reading order of the copy (photos may move beside or above it; that is a re-flow, not a reshuffle)
     # (the logo is left out too: on a banner it leads the row by convention)

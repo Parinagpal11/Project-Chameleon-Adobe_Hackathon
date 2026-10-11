@@ -1,13 +1,9 @@
 """Local HTTP adapter. Requires Pydantic; no FastAPI/Uvicorn dependency."""
-import json, mimetypes, argparse, os
+import json, mimetypes, argparse, os, gzip
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from pydantic import ValidationError
-from models import (TransformRequest, BatchRequest, InferRequest, LearnEditRequest, LearnProposalRequest,
-                    AddRuleRequest, RulePatch, ParseRuleRequest, ProjectSave)
-from engine.intent import infer_edit, infer_any
-from engine.rules import parse_text
-from engine.understand import analyze
+from models import ProjectSave
 from engine.plan import EVAL_SIZES
 import service
 
@@ -28,14 +24,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         super().log_message(fmt, *args)
 
-    def send(self, status, body, kind='application/json'):
+    def send(self, status, body, kind='application/json', cache='no-store'):
         if not isinstance(body, bytes):
-            body = json.dumps(body).encode()
-        self.send_response(status)
+            body = json.dumps(body, separators=(',', ':')).encode()
+        if len(body) > 1400 and 'gzip' in self.headers.get('Accept-Encoding', '') and not kind.startswith(('font/', 'image/')):
+            body = gzip.compress(body, 5)
+            self.send_response(status)
+            self.send_header('Content-Encoding', 'gzip')
+            self.send_header('Vary', 'Accept-Encoding')
+        else:
+            self.send_response(status)
         self.send_header('Content-Type', kind)
         self.send_header('Content-Length', str(len(body)))
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Cache-Control', cache)
         self.end_headers()
         self.wfile.write(body)
 
@@ -53,12 +55,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if m == 'GET':
                 if p == '/health': return self.send(200, {'status': 'ok'})
-                if p == '/rules': return self.send(200, service.get_rules(campaign))
                 if p == '/projects': return self.send(200, service.list_projects())
                 if p == '/project': return self.send(200, service.get_project(campaign))
-                if p == '/benchmark':
-                    from benchmark import run_benchmark
-                    return self.send(200, run_benchmark())
                 if p == '/testset': return self.send(200, {'designs': service.testset_index(), 'sizes': EVAL_SIZES})
                 if p.startswith('/testset/'): return self.send(200, service.testset_design(p[9:]))
                 if p == '/eval': return self.send(200, service.eval_report())
@@ -79,37 +77,20 @@ class Handler(BaseHTTPRequestHandler):
                 if not file.is_file(): return self.send(404, {'detail': 'Not found'})
                 kind = mimetypes.guess_type(file.name)[0] or 'application/octet-stream'
                 if kind.startswith('text/') or kind.endswith('javascript'): kind += '; charset=utf-8'
-                return self.send(200, file.read_bytes(), kind)
+                # fonts never change; pages, scripts and templates are re-checked so an update shows at once
+                return self.send(200, file.read_bytes(), kind, 'public, max-age=31536000, immutable' if file.suffix == '.woff2' else 'no-cache')
             if m == 'DELETE':
-                if p == '/rules': return self.send(200, service.clear_rules(campaign))
-                if p.startswith('/rules/'): return self.send(200, service.delete_rule(campaign, p[7:]))
                 if p == '/project': return self.send(200, service.delete_project(campaign))
-            if m == 'PATCH' and p.startswith('/rules/'):
-                return self.send(200, service.set_enabled(campaign, p[7:], RulePatch.model_validate(self.body()).enabled))
             if m == 'PUT' and p == '/project':
                 return self.send(200, service.save_project(campaign, ProjectSave.model_validate(self.body())))
             if m == 'POST':
                 data = self.body()
-                if p == '/transform': result = service.transform(TransformRequest.model_validate(data))
-                elif p == '/transform-batch': result = service.transform_batch(BatchRequest.model_validate(data))
-                elif p == '/infer-edit':
-                    req = InferRequest.model_validate(data)
-                    result = {'proposals': infer_any(req.before, req.after, req.moved_id, req.kind)}
-                elif p == '/learn-edit': result = service.learn_edit(LearnEditRequest.model_validate(data))
-                elif p == '/learn': result = service.learn_proposal(LearnProposalRequest.model_validate(data))
-                elif p == '/rules':
-                    req = AddRuleRequest.model_validate(data)
-                    r = req.rule
-                    result = service.add_rule(req.campaign, r.type, r.params, r.label, r.source, r.evidence)
-                elif p == '/analyze':
+                if p == '/analyze':
                     result = service.analyze_request(data)
                 elif p == '/adapt':
                     result = service.adapt_request(data)
                 elif p == '/convert':
                     result = service.convert_request(data)
-                elif p == '/parse-rule':
-                    req = ParseRuleRequest.model_validate(data)
-                    result = parse_text(req.text, req.roles)
                 else: return self.send(404, {'detail': 'Not found'})
                 return self.send(200, result)
             self.send(405, {'detail': 'Method not allowed'})
@@ -121,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
             import traceback; traceback.print_exc()
             self.send(500, {'detail': 'Unexpected server error; inspect terminal.'})
 
-    do_GET = do_POST = do_DELETE = do_PATCH = do_PUT = dispatch
+    do_GET = do_POST = do_DELETE = do_PUT = dispatch
 
 
 if __name__ == '__main__':
@@ -130,6 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--host', default=os.environ.get('HOST', '127.0.0.1'))
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
+    import threading; threading.Thread(target=service.warm_up, daemon=True).start()
     print(f'Chameleon running at http://{"127.0.0.1" if args.host in ("0.0.0.0", "") else args.host}:{args.port}', flush=True)
     try:
         server.serve_forever()

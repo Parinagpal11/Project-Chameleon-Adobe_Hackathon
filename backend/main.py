@@ -2,13 +2,16 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from models import (TransformRequest, BatchRequest, InferRequest, LearnEditRequest, LearnProposalRequest,
-                    AddRuleRequest, RulePatch, ParseRuleRequest, ProjectSave)
-from engine.intent import infer_any
-from engine.rules import parse_text
+from models import ProjectSave
 import service
 
-app = FastAPI(title='Chameleon — Campaign Rule Memory')
+app = FastAPI(title='Chameleon')
+
+
+@app.on_event('startup')
+def warm_up():
+    import threading
+    threading.Thread(target=service.warm_up, daemon=True).start()
 
 
 def run(fn, *args):
@@ -26,28 +29,8 @@ def health(): return {'status': 'ok'}
 def example(name: str = 'snow_cabins'):
     if name not in service.TEMPLATES: raise HTTPException(404, 'Unknown template')
     return FileResponse(service.TEMPLATE_DIR / f'{name}.json')
-@app.get('/rules')
-def rules(campaign: str = 'coffee-launch'): return run(service.get_rules, campaign)
-@app.delete('/rules')
-def clear(campaign: str = 'coffee-launch'): return run(service.clear_rules, campaign)
-@app.post('/rules')
-def add(req: AddRuleRequest): return run(service.add_rule, req.campaign, req.rule.type, req.rule.params, req.rule.label, req.rule.source, req.rule.evidence)
-@app.patch('/rules/{rule_id}')
-def patch(rule_id: str, req: RulePatch, campaign: str = 'coffee-launch'): return run(service.set_enabled, campaign, rule_id, req.enabled)
-@app.delete('/rules/{rule_id}')
-def delete(rule_id: str, campaign: str = 'coffee-launch'): return run(service.delete_rule, campaign, rule_id)
-@app.post('/transform')
-def transform(req: TransformRequest): return run(service.transform, req)
-@app.post('/transform-batch')
-def batch(req: BatchRequest): return run(service.transform_batch, req)
-@app.post('/infer-edit')
-def infer(req: InferRequest): return {'proposals': run(infer_any, req.before, req.after, req.moved_id, req.kind)}
-@app.post('/learn-edit')
-def learn_legacy(req: LearnEditRequest): return run(service.learn_edit, req)
-@app.post('/learn')
-def learn(req: LearnProposalRequest): return run(service.learn_proposal, req)
-@app.post('/parse-rule')
-def parse(req: ParseRuleRequest): return parse_text(req.text, req.roles)
+@app.get('/templates')
+def templates(): return [{'id': k, **v} for k, v in service.TEMPLATES.items()]
 @app.get('/projects')
 def projects(): return service.list_projects()
 @app.get('/project')
@@ -76,10 +59,6 @@ def report(): return FileResponse(service.ROOT / 'frontend' / 'eval.html')
 def xray(): return FileResponse(service.ROOT / 'frontend' / 'xray.html')
 @app.get('/how')
 def how(): return FileResponse(service.ROOT / 'frontend' / 'how.html')
-@app.get('/benchmark')
-def benchmark():
-    from benchmark import run_benchmark
-    return run_benchmark()
 
 
 app.mount('/assets', StaticFiles(directory=service.ROOT / 'frontend'), name='assets')

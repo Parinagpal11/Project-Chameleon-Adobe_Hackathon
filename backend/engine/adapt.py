@@ -1403,7 +1403,6 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             bx, by, bw, bh = sub['box']
             cx_ = ((bx + bw / 2) - c['crop'][0]) / c['crop'][2]
             cy_ = ((by + bh / 2) - c['crop'][1]) / c['crop'][3]
-            ob = g.by_id[bg_img['id']].box
             parts = sub.get('parts') or [sub['box']]
 
             def on_canvas(pb, crop, frame):
@@ -1966,7 +1965,6 @@ def _legible_on_photos(nodes: list, a: dict, W: float, H: float, reasons: list):
     the design's light or dark ink instead, whichever reads better."""
     roles = {k: v['role'] for k, v in a['roles'].items()}
     d = {'page': {'width': W, 'height': H}, 'nodes': nodes}
-    by_id = {m['id']: m for m in nodes}
     texts = [m for m in nodes if m['type'] == 'text' and not m.get('hidden') and (m.get('text') or '').strip()]
     inks = [ink(m) for m in texts if _rgb(ink(m))]
     lum = lambda c: sum(_rgb(c)) / 3

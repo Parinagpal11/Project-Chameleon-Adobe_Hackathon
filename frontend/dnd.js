@@ -1,4 +1,4 @@
-/* Chameleon Studio v3 — drag & drop: files from the desktop, rule bubbles, frame presets.
+/* Chameleon Studio — drag & drop: files from the desktop and frame presets.
    Every drag has a click/keyboard equivalent (WCAG 2.2 "dragging movements"). */
 'use strict';
 (function () {
@@ -70,7 +70,7 @@
     slot.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); e.stopPropagation(); slot.classList.remove('over'); endFileDrag(); handleFiles([...e.dataTransfer.files].slice(0, 1), kind); });
   }
 
-  /* ───────── pointer drags: bubbles and presets ───────── */
+  /* ───────── pointer drags: frame presets ───────── */
   function pointerDrag(selector, { makeGhost, onOver, onDrop, onClick }) {
     document.addEventListener('pointerdown', e => {
       const src = e.target.closest(selector); if (!src || e.button !== 0) return;
@@ -94,22 +94,6 @@
   const overViewport = ev => { const r = $('viewport').getBoundingClientRect(), lp = $('left').getBoundingClientRect(), rp = $('right').getBoundingClientRect();
     const inPanel = (p) => ev.clientX >= p.left && ev.clientX <= p.right && ev.clientY >= p.top && ev.clientY <= p.bottom && p.width > 0 && p.left > -10 && p.right < r.width + 10;
     return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom && !inPanel(lp) && !inPanel(rp); };
-
-  // rule bubbles → drop onto an element
-  pointerDrag('.bubble', {
-    makeGhost: src => { const g = src.cloneNode(true); g.classList.add('ghost'); g.removeAttribute('data-b'); return g; },
-    onOver: (src, ev) => {
-      const h = overViewport(ev) ? App.hitTest(ev.clientX, ev.clientY) : null;
-      if (h && h.el) showHint(App.elBoxClient(h.key, h.id), `${App.BUBBLES[+src.dataset.b][0]} → ${niceRole(roleOf(h.el))}`); else hint.hidden = true;
-    },
-    onDrop: (src, ev) => {
-      const h = overViewport(ev) ? App.hitTest(ev.clientX, ev.clientY) : null;
-      if (!h || !h.el) return toast('Drop the bubble onto an element on the canvas.');
-      if (S.pending) return App.flagPending();
-      App.select({ key: h.key, id: h.id });
-      App.applyBubble(+src.dataset.b, h.key, h.id);
-    },
-  });
 
   // frame presets → drop onto the canvas (or click)
   pointerDrag('.preset', {

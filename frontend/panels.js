@@ -19,7 +19,7 @@
     return setTab;
   }
   const setLeftTab = tabs(['layers', 'assets']);
-  const setRightTab = tabs(['design', 'rules']);
+  const setRightTab = tabs(['design']);
   App.setLeftTab = setLeftTab; App.setRightTab = setRightTab;
 
   /* ═════════ LAYERS ═════════ */
@@ -35,7 +35,7 @@
         el('span', { class: 'status-dot' + (issues.length ? ' warn' : ''), title: issues.length ? issues.map(i => i.text).join('\n') : 'All checks pass' }),
         el('span', { class: 'row-meta', text: `${f.width}×${f.height}` }),
         el('button', { class: 'icon-btn sm row-act', tabindex: '-1', 'aria-label': `Remove ${f.name}`, title: 'Remove frame', onclick: ev => { ev.stopPropagation(); removeFrame(f.key); } }, ic('trash')));
-      row.addEventListener('click', () => { if (S.pending) return App.flagPending(); App.select({ key: f.key, id: null }); App.focusFrame(f.key); });
+      row.addEventListener('click', () => { App.select({ key: f.key, id: null }); App.focusFrame(f.key); });
       row.addEventListener('keydown', e => treeKeys(e, f.key, null));
       const li = el('li', { role: 'none' }, row);
       if (open) {
@@ -46,8 +46,8 @@
             ic(e.type === 'image' ? 'image' : ROLE_ICON[roleOf(e)] || 'type', 'i row-icon'),
             el('span', { class: 'row-name', text: elName(e), title: elName(e) }),
             el('button', { class: 'icon-btn sm row-act' + (hidden ? ' on' : ''), tabindex: '-1', 'aria-label': hidden ? `Show ${elName(e)} in ${f.name}` : `Hide ${elName(e)} in ${f.name}`, title: hidden ? 'Show in this frame' : 'Hide in this frame',
-              onclick: ev => { ev.stopPropagation(); applyAction(f.key, e.id, 'hide', !hidden, 'frame'); } }, ic(hidden ? 'eyeOff' : 'eye')));
-          r.addEventListener('click', () => { if (S.pending) return App.flagPending(); if (hidden) { App.select({ key: f.key, id: e.id }); return; } App.select({ key: f.key, id: e.id }); });
+              onclick: ev => { ev.stopPropagation(); applyAction(f.key, e.id, 'hide', !hidden); } }, ic(hidden ? 'eyeOff' : 'eye')));
+          r.addEventListener('click', () => App.select({ key: f.key, id: e.id }));
           r.addEventListener('keydown', ev => treeKeys(ev, f.key, e.id));
           return el('li', { role: 'none' }, r);
         });
@@ -68,7 +68,6 @@
   }
 
   /* ═════════ ASSETS ═════════ */
-  const SWATCHES = [['background', 'Background'], ['text', 'Text'], ['primary', 'Button'], ['accent', 'Image backdrop']];
   App.paintAssets = function () {
     if (!S.design) return;
     $('swatches').closest('.group').hidden = true;      // colours come from the design itself
@@ -122,7 +121,7 @@
   function paintDesign() {
     const pane = $('pane-design');
     if (!S.design) return;
-    const selKey = S.sel ? S.sel.key + '/' + (S.sel.id || '') + '/' + S.scope : '';
+    const selKey = S.sel ? S.sel.key + '/' + (S.sel.id || '') : '';
     const a = document.activeElement;
     // don't rebuild under the user's cursor while they type in the inspector
     if (selKey === lastSel && pane.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
@@ -164,9 +163,9 @@
         const on = c === chosen(key), cv = el('canvas', { 'aria-hidden': 'true' });
         GV.draw(cv, displayOf(c), { scale: Math.min(118 / f.width, 84 / f.height), dpr: DPR });
         const n = issuesOf(key, c).length;
-        return el('button', { class: 'layout-opt', role: 'radio', 'aria-checked': on, 'aria-label': `${STRATEGY[c.strategy] || c.strategy}${n ? `, ${n} warnings` : ''}`, onclick: () => {
+        return el('button', { class: 'layout-opt', role: 'radio', 'aria-checked': on, 'aria-label': `${c.strategy}${n ? `, ${n} warnings` : ''}`, onclick: () => {
           if (on) return; const before = snapshot(); S.choices[key] = c.strategy; recordDesignChange('layout choice', before); App.paint('all'); save();
-        } }, cv, el('span', { text: STRATEGY[c.strategy] || c.strategy }), n ? el('span', { class: 'warnmark', text: `${n} warning${n > 1 ? 's' : ''}` }) : el('span', { class: 'okmark', text: `✓ Score ${Math.round(c.score.overall || 0)}` }));
+        } }, cv, el('span', { text: c.strategy }), n ? el('span', { class: 'warnmark', text: `${n} warning${n > 1 ? 's' : ''}` }) : el('span', { class: 'okmark', text: `✓ Score ${Math.round(c.score.overall || 0)}` }));
       }))),
       group('Checks', issues.length
         ? el('ul', { class: 'issue-list' }, issues.map(i => el('li', { class: 'issue' }, ic('alert'), el('span', { text: i.text }), i.id ? el('button', { class: 'btn ghost sm', text: 'Select', onclick: () => App.select({ key, id: i.id }) }) : null)))
@@ -187,7 +186,7 @@
       const usable = CORNERS.includes(c) || c === 'none';
       return el('button', { class: c === 'none' ? 'center' : usable ? '' : 'na', tabindex: usable ? null : '-1', 'aria-hidden': usable ? null : 'true', disabled: !usable || null,
         'aria-pressed': usable ? pinVal === c : null, 'aria-label': usable ? (c === 'none' ? 'Not pinned' : `Pin ${c.replace('-', ' ')}`) : null, title: usable ? (c === 'none' ? 'Back to the layout position' : `Pin ${c.replace('-', ' ')}`) : null,
-        onclick: usable ? () => applyAction(key, e.id, 'pin', c, 'frame') : null });
+        onclick: usable ? () => applyAction(key, e.id, 'pin', c) : null });
     }));
     const visible = !e.hidden;
     const ov = (S.overrides[key] || {})[e.id];
@@ -198,17 +197,17 @@
       !isImg ? group(`Adjust in ${f.name}`,
         el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Pin' }), pinGrid),
         e.type === 'text' || e.type === 'logo' && !e.src ? el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Align' }), el('div', { class: 'seg', role: 'group', 'aria-label': 'Alignment' },
-          [['left', 'alignLeft'], ['center', 'alignCenter'], ['right', 'alignRight']].map(([a, icn]) => el('button', { 'aria-pressed': alignNow === a, 'aria-label': `Align ${a}`, title: `Align ${a}`, onclick: () => applyAction(key, e.id, 'align', a, 'frame') }, ic(icn))))) : null,
+          [['left', 'alignLeft'], ['center', 'alignCenter'], ['right', 'alignRight']].map(([a, icn]) => el('button', { 'aria-pressed': alignNow === a, 'aria-label': `Align ${a}`, title: `Align ${a}`, onclick: () => applyAction(key, e.id, 'align', a) }, ic(icn))))) : null,
         el('div', { class: 'ctrl-row' }, el('span', { class: 'label', text: 'Size' }), el('div', { class: 'stepper' },
-          el('button', { 'aria-label': 'Smaller', title: 'Smaller', onclick: () => applyAction(key, e.id, 'size', .87, 'frame') }, '−'),
+          el('button', { 'aria-label': 'Smaller', title: 'Smaller', onclick: () => applyAction(key, e.id, 'size', .87) }, '−'),
           el('output', { 'aria-live': 'polite', text: e.fontSize ? `${Math.round(e.fontSize)}px` : `${Math.round(e.height)}px` }),
-          el('button', { 'aria-label': 'Bigger', title: 'Bigger', onclick: () => applyAction(key, e.id, 'size', 1.15, 'frame') }, '+'))),
+          el('button', { 'aria-label': 'Bigger', title: 'Bigger', onclick: () => applyAction(key, e.id, 'size', 1.15) }, '+'))),
         el('p', { class: 'hint', text: `Only ${f.name} changes. You can also drag it on the canvas.` }),
       ) : group('Photo', el('p', { class: 'hint', text: 'Chameleon frames the photo for each size. To choose what must stay in view, use Photo framing on the size.' }),
         el('button', { class: 'btn sm', onclick: () => App.select({ key, id: null }) }, ic('image'), 'Photo framing')),
       group('Visibility', el('div', { class: 'ctrl-row' },
         el('span', { text: `Show in ${f.name}` }),
-        el('button', { class: 'toggle', role: 'switch', 'aria-checked': visible, 'aria-label': 'Visible', onclick: () => applyAction(key, e.id, 'hide', visible, 'frame') }))),
+        el('button', { class: 'toggle', role: 'switch', 'aria-checked': visible, 'aria-label': 'Visible', onclick: () => applyAction(key, e.id, 'hide', visible) }))),
       ov ? group('Your tweak', el('div', { class: 'ctrl-row' }, el('span', { class: 'muted', text: 'Changed by you in this size.' }),
         el('button', { class: 'btn sm', text: 'Reset', onclick: () => { const before = snapshot(); delete S.overrides[key][e.id]; recordDesignChange('reset tweak', before); App.paint('all'); save(); } }))) : null,
       el('div', { class: 'group' }, el('button', { class: 'btn sm', onclick: () => App.select({ key, id: null }) }, ic('chevronLeft'), `Back to ${f.name}`)),
@@ -283,82 +282,6 @@
     return v && h ? `${v}-${h}` : 'none';
   }
 
-  /* ═════════ INSPECTOR: RULES ═════════ */
-  function paintRules() {
-    const rules = S.rules || [];
-    $('rules-count').textContent = rules.length;
-    $('rules-empty').hidden = rules.length > 0;
-    $('rules-list').replaceChildren(...rules.map(r => {
-      const cov = ruleCoverage(r);
-      const src = r.source === 'text' ? `Typed: “${r.evidence?.text || ''}”` : r.source === 'edit' ? `From your edit${r.evidence?.canvas ? ` in a ${r.evidence.canvas.width}×${r.evidence.canvas.height} frame` : ''}` : 'Added manually';
-      let status = null;
-      if (r.enabled) {
-        if (r.type === 'hide_small') status = el('div', { class: 'rule-status ' + (cov.applies ? 'ok' : 'na') }, ic(cov.applies ? 'eyeOff' : 'eye'), cov.applies ? `Hidden in ${cov.applies} of ${cov.n} frames` : 'No frame is that small');
-        else if (cov.applies) status = el('div', { class: 'rule-status ' + (cov.met === cov.applies ? 'ok' : 'warn') }, ic(cov.met === cov.applies ? 'check' : 'alert'), cov.met === cov.applies ? `Met in all ${cov.applies} frames` : `Met in ${cov.met} of ${cov.applies} frames`);
-        else status = el('div', { class: 'rule-status na' }, 'No matching element in this design');
-      }
-      return el('li', { class: 'rule' + (r.enabled ? '' : ' off') + (r.id === App.newRuleId ? ' new' : '') },
-        el('span', { class: 'rule-ic' }, ic(RULE_ICON[r.type] || 'sparkle')),
-        el('div', {}, el('div', { class: 'rule-label', text: r.label }), el('div', { class: 'rule-meta', text: src }), status),
-        el('div', { class: 'rule-ctrl' },
-          el('button', { class: 'toggle', role: 'switch', 'aria-checked': r.enabled, 'aria-label': `${r.enabled ? 'Turn off' : 'Turn on'}: ${r.label}`, onclick: () => toggleRule(r) }),
-          el('button', { class: 'icon-btn sm', 'aria-label': `Delete rule: ${r.label}`, title: 'Delete', onclick: () => deleteRule(r) }, ic('x'))));
-    }));
-    setTimeout(() => { App.newRuleId = null; }, 0);
-  }
-  App.focusRuleInput = () => { openPanel('right', true); setRightTab('rules'); $('rule-input').focus(); };
-  $('dock-cmd').onclick = App.focusRuleInput;
-  $('rule-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const text = $('rule-input').value.trim(); if (!text) return;
-    const out = $('parse-result');
-    try {
-      const r = await api('/parse-rule', 'POST', { text, roles: S.roles });
-      if (!r.rules.length) {
-        out.replaceChildren(el('div', { class: 'pr-miss', text: 'I couldn’t turn that into a rule yet.' }),
-          el('div', { class: 'hint', text: 'Name an element (logo, headline, offer, CTA, image, legal) and what it should do: top-left, center, bigger, below the offer, hide on small banners.' }));
-        return;
-      }
-      const boxes = r.rules.map((x, i) => el('input', { type: 'checkbox', checked: true, id: 'pr-' + i }));
-      out.replaceChildren(...[
-        el('div', { class: 'label', text: r.rules.length > 1 ? `Understood ${r.rules.length} rules` : 'Understood' }),
-        ...r.rules.map((x, i) => el('label', { class: 'pr-row', for: 'pr-' + i }, boxes[i], el('span', { class: 'rule-ic' }, ic(RULE_ICON[x.type])), el('span', { text: x.label }))),
-        r.unmatched.length ? el('div', { class: 'pr-miss', text: `Skipped: “${r.unmatched.join('”, “')}”` }) : null,
-        el('div', { class: 'pr-actions' },
-          el('button', { type: 'button', class: 'btn ghost sm', text: 'Cancel', onclick: () => out.replaceChildren() }),
-          el('button', { type: 'button', class: 'btn primary sm', id: 'pr-add', text: r.rules.length > 1 ? 'Add rules' : 'Add rule', onclick: async () => {
-            const picked = r.rules.filter((_, i) => boxes[i].checked); if (!picked.length) return;
-            try {
-              for (const x of picked) await addRule(x.type, x.params, { source: 'text', evidence: x.evidence, label: x.label });
-              out.replaceChildren(); $('rule-input').value = '';
-            } catch (err) { toast(err.message, { error: true }); await refresh(true); }
-          } }))].filter(Boolean));
-      $('pr-add').focus();
-    } catch (err) { toast(err.message, { error: true }); }
-  });
-  $('examples').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('rule-input').value = b.textContent; $('rule-form').requestSubmit(); });
-
-  /* rule bubbles (drag handled in dnd.js; click = apply to selection) */
-  const BUBBLES = [
-    ['Pin top-left', 'pin', 'pin', 'top-left'], ['Pin top-right', 'pin', 'pin', 'top-right'], ['Pin bottom-left', 'pin', 'pin', 'bottom-left'], ['Pin bottom-right', 'pin', 'pin', 'bottom-right'],
-    ['Align left', 'alignLeft', 'align', 'left'], ['Center', 'alignCenter', 'align', 'center'], ['Align right', 'alignRight', 'align', 'right'],
-    ['Bigger', 'size', 'size', 'up'], ['Smaller', 'size', 'size', 'down'], ['Hide when small', 'eyeOff', 'hide', true],
-  ];
-  App.BUBBLES = BUBBLES;
-  $('bubbles').replaceChildren(...BUBBLES.map(([label, icon, action, value], i) => el('button', { type: 'button', class: 'bubble', 'data-b': i, 'aria-label': `${label}: apply to the selected element, or drag onto an element` }, ic(icon), label)));
-  App.applyBubble = function (i, key, id) {
-    const [label, , action, value] = BUBBLES[i];
-    const d = display(key), t = d?.elements.find(x => x.id === id); if (!t) return;
-    if (t.type === 'image' && action !== 'hide') return toast(`“${label}” works on text, buttons and logos.`, { error: true });
-    const v = action === 'size' ? currentWeight(roleOf(t)) * (value === 'up' ? 1.25 : .8) : value;
-    applyAction(key, id, action, v, 'all');
-  };
-  $('bubbles').addEventListener('click', e => {
-    const b = e.target.closest('.bubble'); if (!b || b.dataset.dragged) { if (b) delete b.dataset.dragged; return; }
-    if (!S.sel?.id) return toast('Select an element on the canvas first, or drag the bubble onto one.');
-    App.applyBubble(+b.dataset.b, S.sel.key, S.sel.id);
-  });
-
   /* ═════════ ADD FRAME ═════════ */
   function paintPresets() {
     const groups = CATALOG.map(g => ({ group: g.group, items: g.items.map(([key, name, width, height]) => ({ key, name, width, height })) }));
@@ -408,7 +331,6 @@
     if (what === 'canvas') return;
     paintLayers();
     if (what !== 'metrics' || !S.sel || !S.sel.id) paintDesign();
-    if (what !== 'selection') paintRules();
     if (!$('add-frame').hidden) paintPresets();
     if (what === 'selection' && S.sel?.id && window.innerWidth <= 900) { /* keep panels closed on phones */ }
   });

@@ -1,23 +1,10 @@
-# Project Chameleon — resize a design without breaking it
+# Project Chameleon: one design, every size
 
-**Adobe University Hackathon 2026 · Iowa State University · Pari Nagpal, Priyanshu, Anwar.** Chameleon takes an existing design and reshapes it for a new canvas size so it still looks intentionally designed: not stretched, not badly cropped. Fix one size once and every other size follows.
+**Adobe University Hackathon 2026 · Iowa State University · Pari Nagpal, Priyanshu, Anwar.**
 
-> **Status (Oct 6):** the companion tool, server, storage and tests below are working (v3). Engine v2 has started. The **Understand** stage reads groups, roles, grid, anchors, reading order and photo subjects, and you can see it at **http://127.0.0.1:8000/xray** (details in [docs/ENGINE.md](docs/ENGINE.md)). The **Solve** stage (`POST /adapt`) now lays every design out at new sizes; open the X-ray's **Resize** tab to compare Stretch, Centre crop and Chameleon. Score comes next, following [docs/STRATEGY.md](docs/STRATEGY.md). Schedule and checklist: [docs/PLAN.md](docs/PLAN.md). Submissions close **Oct 30, 2026**.
+Chameleon takes one ad design and lays it out again for every format: Instagram Story, feed post, LinkedIn banner, leaderboard and more. It doesn't stretch or crop the design. For each size it finds the people and products in the photo, moves and re-sizes the text and photo for the new shape, tries several layouts, scores them against a plain resize, and explains in plain words why it picked the one it did.
 
-## Repository map
-
-| Path | What's there |
-|---|---|
-| `backend/` | Python engine (`engine/`), service layer, HTTP server |
-| `frontend/` | Companion tool: vanilla JS + Canvas, no build step |
-| `examples/` | Studio samples; `examples/testset/` holds the tiered test set (12 seed designs, target 36) |
-| `tools/` | Scripts, for example regenerating the seed test set |
-| `tests/` | Unit, HTTP and browser (Playwright) tests |
-| `docs/` | Strategy, build plan, engine notes |
-| `design-system/` | UI tokens and rules for the companion tool |
-| `benchmarks/`, `previews/` | Current benchmark output and screenshots |
-
-## Run on your Mac
+## Run it
 
 Requires Python 3.10+.
 
@@ -28,80 +15,74 @@ python -m pip install -r requirements.txt
 python run.py
 ```
 
-Open http://127.0.0.1:8000. Stop with Control+C. The app restarts itself when backend code changes (use `python run.py --no-reload` for demos). If port 8000 is busy, use `python run.py --port 8001`. To host it for a demo, run `python run.py --host 0.0.0.0` (the `PORT` environment variable is respected). There is no login yet.
+Open http://127.0.0.1:8000 and stop with Control+C.
 
-You don't need Node, an API key or a build step. Fonts load from Google Fonts when online and fall back to system fonts offline.
+- The app restarts itself when backend code changes. Use `python run.py --no-reload` for demos.
+- If port 8000 is busy, use `python run.py --port 8001`.
+- To host it, run `python run.py --host 0.0.0.0` (the `PORT` environment variable is respected).
+- No Node, API key, build step or internet connection is needed. Fonts are served with the app.
 
-## 60-second demo
+## Try it in a minute
 
-1. Home → **New from sample** (or pick the Stride / Northwind template). Six formats appear as frames on one canvas.
-2. Drag the logo into a corner of **Instagram Post**. A popover asks *“Make this a rule? Logo pinned bottom right”*. Click **All frames**, and every frame updates with a green flash. Click **This frame only** instead to keep a one-off tweak.
-3. Press **⌘K**, type “hide the offer on small banners”, and press Enter, then **Add rule**. The Leaderboard drops the offer.
-4. Drag a **rule bubble** such as “Pin top-left” from the Rules tab onto a headline.
-5. Drag a product photo and a logo from Finder onto the canvas. Chameleon sorts out which is which.
-6. **Export** gives you a ZIP of PNGs, one per frame, plus a manifest.
+1. On the home page, click **Try on a sample**. One design appears laid out for six sizes on one canvas.
+2. Click a size's name. **Why it looks like this** explains each decision. **Layouts tried** shows every option the engine built, with its score. Click one to use it.
+3. Under **Photo framing**, choose **Focus area** and drag a box over what matters, or choose **Whole photo** to never crop it. Every size follows.
+4. Drag anything in one size to adjust it by hand. Only that size changes.
+5. Drop your own photo and logo on the canvas, then click **Export** for a ZIP with a PNG of every size.
 
-Use **Tour** (top right) or **Main menu → Feature guides** for animated walkthroughs of every feature.
+**Tour** walks through all of this on the real canvas. **How it works** shows what the engine did on your design, step by step. **Engine room** (`/xray`) is the full technical view.
 
-## Interface (familiar to designers)
+## How the engine works
 
-| Area | What it does |
+| Stage | What it does | Code |
+|---|---|---|
+| Understand | Groups elements, gives each a role (headline, button, logo, photo…), and finds faces, people or the main object in each photo | `backend/engine/understand.py`, `subject.py` |
+| Plan | Decides how much each size has to change: keep the layout, re-flow it, or rebuild it | `backend/engine/plan.py` |
+| Solve | Builds several candidate layouts per size and keeps text readable on photos | `backend/engine/adapt.py` |
+| Check and score | Flags overlaps, anything off the edge, text under 12 px and low contrast, and scores every layout against stretch, crop and letterbox | `backend/engine/score.py` |
+
+More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/STRATEGY.md](docs/STRATEGY.md) and the schedule in [docs/PLAN.md](docs/PLAN.md).
+
+## Repository map
+
+| Path | What's there |
 |---|---|
-| Canvas | Every format is a labelled frame. Scroll to pan, ⌘/Ctrl + scroll to zoom, Space-drag or **H** to pan, **⇧1** zoom to fit, **⇧2** zoom to selection. Click to select, drag to move, corner handles to resize. |
-| Layers (left) | Frames and their elements in a tree. Eye toggles hide an element in one frame. **+** adds frames from 14 presets or a custom size (click, or drag a preset onto the canvas). |
-| Assets (left) | Product image and logo slots, four brand colors, six typefaces and shared copy. |
-| Design (right) | Depends on the selection: campaign overview, frame (layout options, checks, tweaks, export) or element (All frames / This frame switch, role, copy, 9-dot pin picker, alignment, size, visibility). |
-| Rules (right) | Plain-English rule box, draggable rule bubbles, and the campaign rule list with on/off switches and “Met in N frames” status. |
-| Tool dock (bottom) | Move / Hand tools, zoom, and a ⌘K rule box. |
-| Theme | Light and dark. Follows your system until you choose one with the sun/moon button. |
+| `backend/engine/` | The layout engine (above). `models/u2netp.onnx` is the photo-subject model; `fonts.json` holds glyph widths for measuring text. |
+| `backend/service.py` | Request handling, project storage (SQLite), templates, result cache, start-up warm-up |
+| `backend/local_server.py` | The default HTTP server. `backend/main.py` is an optional FastAPI version of it. |
+| `frontend/` | The Studio, home, How it works, Engine room and report pages: plain JS and Canvas, no build step |
+| `examples/templates/` | Starter designs with real photos |
+| `examples/testset/` | The tiered test set used by the Engine room and the report |
+| `tools/` | Scripts that regenerate `fonts.json` and the seed test set |
+| `tests/` | Engine, HTTP and browser (Playwright) tests |
+| `docs/`, `design-system/` | Engine notes, strategy, plan; UI tokens and rules |
 
-Keyboard: **V** move, **H** hand, **Tab** next element, arrows nudge (⇧ = 10 px), **Delete** hide in this frame, **Esc** undo a pending change, **⌘Z / ⇧⌘Z** undo/redo, **⌘K** rule box, **⌘E** export, **?** shortcuts sheet.
+## API
 
-## What it can learn
+- `POST /adapt`: a design plus target sizes in; for each size, the adapted design, its reasons, checks, score, the alternatives it tried, and stretch/crop/letterbox baselines out.
+- `POST /analyze`: groups, roles, grid, reading order, photo subjects and tiers.
+- `POST /convert`: converts a design saved in the older Studio format to the current format.
+- `GET /templates`, `GET /example?name=`: starter designs.
+- `GET /projects`, `GET | PUT | DELETE /project?campaign=`: saved campaigns.
+- `GET /testset`, `GET /testset/{id}`, `GET /eval`: the test set and its scores.
+- Pages: `/`, `/how`, `/xray`, `/report`.
 
-| Rule | From an edit | From a bubble or inspector control | Typed |
-|---|---|---|---|
-| Order (A above/below B) | drag one element above or below another | — | “CTA below the offer” |
-| Corner pin | drag into a corner | Pin bubbles · 9-dot picker | “logo top-left” |
-| Alignment | drag a button or logo left, centre or right | Align bubbles · align control | “center the headline” |
-| Size (prominence) | resize with a corner handle | Bigger/Smaller · size stepper | “make the CTA bigger” |
-| Hide on small sizes | — | Hide bubble · visibility switch · Delete key, then “Hide in all frames this small” | “hide the offer on small banners” |
+## Speed
 
-Rules are keyed by semantic **role** (headline, offer, CTA, logo, image, legal…), so they transfer to new designs. Rules learned from edits are re-verified on the server. The newest rule for a role replaces the older one, and contradictory order rules are rejected.
-
-## Accuracy
-
-- **Warnings come from what is actually drawn.** The renderer reports each text element's final fitted font size, so “Text under 12px” matches the exported PNG rather than a server estimate. The checks also cover overlaps, elements outside the frame, missing required elements and unmet rules.
-- **Every rule is checked in every frame.** Size rules compare the element's size against the headline, using the expected type-scale ratio. They are no longer reported as met automatically.
-- Wide banners get a dedicated layout (text | CTA | image), and narrow skyscrapers get a small-image layout.
-- Each project is autosaved. Its link (`/#c=…`) reopens it, and browser Back returns to the home screen.
-
-## Architecture
-
-- `backend/engine/rules.py`: rule vocabulary, binding by role, per-frame checks (including real size verification) and the plain-English parser.
-- `backend/engine/intent.py`: infers rules from a move, resize or hide.
-- `backend/engine/generator.py`: layouts, including the banner and small-image strategies, per-glyph text measurement, pins, alignment, emphasis and hiding.
-- `backend/service.py`: compile, score, batch transform, SQLite rules and projects, templates.
-- `backend/local_server.py`: the default HTTP server. `backend/main.py` is an optional FastAPI adapter that hasn't been integration-tested.
-- `frontend/`: `index.html`, `app.css` (light/dark tokens), `tour.css`, `silk.js` (animated ribbon behind the home screen), `icons.js` (SVG icons), `core.js` (state, sync, rules, history, projects, export), `canvas.js` (pan/zoom/select/drag), `panels.js` (layers, assets, inspector, rules), `dnd.js` (drag & drop), `tour.js` (animated tour and guides), `home.js`, `render.js`, `zip.js`.
-
-Engine v2 API: `POST /analyze` (design → groups, roles, grid, anchors, reading order, subjects, tiers) · `POST /adapt` (design + sizes → adapted designs, reasons, checks, scores, stretch/crop/letterbox baselines) · `GET /eval` (scores for the whole test set; the page is `/report`) · `GET /testset` · `GET /testset/{id}` · `GET /xray`
-
-Studio API: `POST /transform-batch` · `/transform` · `/infer-edit` · `/learn` · `/parse-rule` · `GET|POST|DELETE /rules` · `PATCH|DELETE /rules/{id}` · `GET /projects` · `GET|PUT|DELETE /project?campaign=` · `GET /templates` · `GET /example?name=` · `GET /benchmark`
+- **Results are remembered.** The engine gives the same result for the same design and sizes, so recent results are kept in memory. Reopening a campaign, the home demo and How it works answer instantly.
+- **Models load at start-up.** The photo models load in the background when the server starts, so the first visitor doesn't wait for them.
+- **The background ribbon doesn't slow the page.** It is drawn in a background worker at 30 frames a second and stops when you scroll past it.
+- **The home page loads in order.** The hero shows the design first. The sections below load as you scroll toward them.
 
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v        # 58 tests (7 browser tests skip without Playwright)
+python -m unittest discover -s tests
 ```
 
-`tests/test_ui_e2e.py` drives the real UI in Chromium. It covers dragging to learn a rule, undo/redo, ZIP export, frame-only tweaks, inspector rules, typed rules, bubble drag, adding frames, file drop and reopening a project. It skips itself unless Playwright is installed (`pip install playwright && python -m playwright install chromium`).
+The browser tests (`test_ui_e2e.py`, `test_xray_e2e.py`) drive the real pages in Chromium. They cover the sample, layouts, hand edits, export, photo framing, adding frames, dropping a photo, reopening a project, How it works, and the guided tour. They skip themselves unless Playwright is installed (`pip install playwright && python -m playwright install chromium`).
 
-## Honest limits
+## Limits
 
-- Layouts are heuristic: three strategies per shape and no aesthetic scoring.
-- Input is Chameleon JSON or the templates. There's no Figma, PSD or image-to-layers import yet.
-- It's single-user and local, with no accounts or sharing.
-- Five rule types are learned. Brand-safety and color rules are not.
-
-See `ROADMAP.md` for what comes next.
+- Input is Chameleon JSON, the templates, or your own photo and logo. There is no Figma or PSD import yet.
+- It is single-user and local, with no accounts or sharing.

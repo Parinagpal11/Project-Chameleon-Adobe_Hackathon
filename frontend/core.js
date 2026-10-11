@@ -1,7 +1,6 @@
-/* Chameleon Studio v3 — core: state, server sync, rules, history, projects, assets, export, theme. */
+/* Chameleon Studio — core: state, server sync, history, projects, assets, export, theme. */
 'use strict';
 const $ = id => document.getElementById(id);
-const R = window.ChameleonRender;
 const clone = o => JSON.parse(JSON.stringify(o));
 const DPR = Math.min(2, window.devicePixelRatio || 1);
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
@@ -17,16 +16,13 @@ const CATALOG = [
     ['billboard', 'Billboard', 970, 250], ['interstitial', 'Mobile interstitial', 320, 480], ['mobile-lg', 'Large mobile banner', 320, 100]] },
 ];
 const DEFAULT_SELECTED = ['ig-story', 'ig-post', 'feed', 'li-banner', 'mrec', 'leaderboard'];
-const ROLES = ['headline', 'subtitle', 'offer', 'body', 'cta', 'logo', 'legal', 'hero', 'decoration'];
 const ROLE_ICON = { headline: 'type', subtitle: 'type', offer: 'type', body: 'type', legal: 'type', cta: 'target', logo: 'sparkle', hero: 'image', decoration: 'sparkle' };
-const RULE_ICON = { order: 'order', pin: 'pin', align: 'alignCenter', emphasis: 'size', hide_small: 'eyeOff' };
-const STRATEGY = { hero_top: 'Image top', hero_small: 'Small image', stacked: 'Image bottom', text_left: 'Text left', text_right: 'Text right', row: 'One row', banner: 'Banner' };
 
 /* ───────── state ───────── */
 const S = {
   view: 'home', campaign: null, name: '', design: null, assets: {}, custom: [], selected: new Set(DEFAULT_SELECTED),
-  results: {}, rules: [], roles: [], roleMap: {}, choices: {}, overrides: {}, metrics: {},
-  sel: null, edit: null, pending: null, history: [], future: [], seq: 0, scope: 'frame', tool: 'move',
+  results: {}, roles: [], roleMap: {}, choices: {}, overrides: {}, metrics: {},
+  sel: null, edit: null, history: [], future: [], seq: 0, tool: 'move',
 };
 const App = { painters: [], paint(what) { for (const p of this.painters) p(what); } };
 
@@ -38,6 +34,12 @@ async function api(path, method = 'GET', data) {
   let v = null; try { v = await r.json(); } catch { /* empty */ }
   if (!r.ok) throw Error((v && (typeof v.detail === 'string' ? v.detail : JSON.stringify(v.detail))) || `Request failed (${r.status})`);
   return v;
+}
+/** GET requests whose answer never changes while the page is open (templates): fetched once, a fresh copy each time. */
+const _fetched = {};
+function apiOnce(path) {
+  if (!_fetched[path]) _fetched[path] = api(path).catch(e => { delete _fetched[path]; throw e; });
+  return _fetched[path].then(v => JSON.parse(JSON.stringify(v)));
 }
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -113,7 +115,7 @@ function syncUndo() {
   $('undo').title = S.history.length ? `Undo ${S.history.at(-1).label} (⌘Z)` : 'Undo (⌘Z)';
   $('redo').title = S.future.length ? `Redo ${S.future.at(-1).label} (⇧⌘Z)` : 'Redo (⇧⌘Z)';
 }
-async function undo() { if (S.pending) { cancelEdit(); return; } const h = S.history.pop(); if (!h) return; try { await h.undo(); S.future.push(h); toast(`Undid ${h.label}`); } catch (e) { toast(e.message, { error: true }); } syncUndo(); }
+async function undo() { const h = S.history.pop(); if (!h) return; try { await h.undo(); S.future.push(h); toast(`Undid ${h.label}`); } catch (e) { toast(e.message, { error: true }); } syncUndo(); }
 async function redo() { const h = S.future.pop(); if (!h) return; try { await h.redo(); S.history.push(h); toast(`Redid ${h.label}`); } catch (e) { toast(e.message, { error: true }); } syncUndo(); }
 function snapshot() { return { design: clone(S.design), assets: { ...S.assets }, overrides: clone(S.overrides), choices: { ...S.choices }, selected: [...S.selected], custom: clone(S.custom) }; }
 function restore(s) {
@@ -150,12 +152,11 @@ async function uniqueName(name) {
   try { const names = new Set((await api('/projects')).map(p => p.name)); name = name.replace(/ \d+$/, ''); let n = name, i = 2; while (names.has(n)) n = `${name} ${i++}`; return n; }
   catch { return name; }
 }
-async function newProject(design, { name = 'Untitled campaign', assets = {}, state = null, rules = [] } = {}) {
+async function newProject(design, { name = 'Untitled campaign', assets = {}, state = null } = {}) {
   S.campaign = 'c-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   S.name = await uniqueName(name); S.design = await toGraph(design); S.assets = assets;
   S.custom = state?.custom || []; S.selected = new Set(state?.selected || DEFAULT_SELECTED);
   S.choices = state?.choices || {}; S.overrides = state?.overrides || {}; S.history = []; S.future = []; S.results = {}; S.metrics = {}; S.sel = null;
-  for (const r of rules) { try { await api('/rules', 'POST', { campaign: S.campaign, rule: { type: r.type, params: r.params, label: r.label || '', source: r.source || 'manual', evidence: r.evidence || {} } }); } catch { /* skip invalid */ } }
   await api('/project?campaign=' + S.campaign, 'PUT', { name: S.name, design: S.design, assets: S.assets, formats: [], state: { selected: [...S.selected], custom: S.custom, choices: S.choices, overrides: S.overrides } }).catch(() => {});
   enterEditor();
 }
@@ -174,7 +175,7 @@ async function startTemplate(id = 'snow_cabins', extra = {}) {
   const reuse = !extra.assets && !extra.state && store.get('chameleon.sample.' + id);
   if (reuse) { try { await api('/project?campaign=' + encodeURIComponent(reuse)); return openProject(reuse); } catch { /* deleted: make a new one */ } }
   try {
-    const [d, list] = await Promise.all([api('/example?name=' + id), api('/templates')]);
+    const [d, list] = await Promise.all([apiOnce('/example?name=' + id), apiOnce('/templates')]);
     const t = list.find(x => x.id === id);
     await newProject(d, { name: t ? t.name : 'Untitled campaign', ...extra });
     if (!extra.assets && !extra.state) store.set('chameleon.sample.' + id, S.campaign);
@@ -191,7 +192,7 @@ function enterEditor() {
   S.view = 'editor'; $('home').hidden = true; $('editor').hidden = false;
   $('project-name').value = S.name; document.title = `${S.name} · Chameleon`;
   if (location.hash !== '#c=' + S.campaign) history.pushState(null, '', '#c=' + S.campaign);
-  S.edit = null; S.pending = null; hideNoticed(); syncUndo();
+  S.edit = null; syncUndo();
   App.paintAssets?.();
   refresh(true).then(() => {
     App.zoomFit?.(false);
@@ -214,7 +215,7 @@ async function doRefresh() {
     if (seq !== S.seq) return;
     S.results = {}; r.results.forEach(x => { S.results[x.name] = asResult(x); });
     const firstRoles = !Object.keys(S.roleMap).length;
-    S.roleMap = r.roles || {}; S.rules = []; S.roles = [...new Set(Object.values(S.roleMap))];
+    S.roleMap = r.roles || {}; S.roles = [...new Set(Object.values(S.roleMap))];
     if (firstRoles) App.paintAssets?.();
     App.paint('all');
   } catch (e) { toast(e.message, { error: true }); }
@@ -270,64 +271,7 @@ function issuesOf(key, cand) {
   }
   return out;
 }
-function ruleResult(key, ruleId) { return (chosen(key)?.rule_results || []).find(x => x.id === ruleId); }
-function ruleCoverage(rule) {
-  let met = 0, applies = 0;
-  for (const f of activeFormats()) { const rr = ruleResult(f.key, rule.id); if (rr && rr.applies) { applies++; if (rr.satisfied) met++; } }
-  return { met, applies, n: activeFormats().length };
-}
 function hasTweaks(key) { return Object.keys(S.overrides[key] || {}).length > 0; }
-
-/* ───────── rules ───────── */
-function sameKey(a, b) {
-  if (a.type !== b.type) return false;
-  if (a.type === 'order') return [a.params.source_role, a.params.target_role].sort().join() === [b.params.source_role, b.params.target_role].sort().join();
-  return a.params.role === b.params.role;
-}
-const ruleBody = r => ({ campaign: S.campaign, rule: { type: r.type, params: r.params, label: r.label || '', source: r.source || 'manual', evidence: r.evidence || {} } });
-function trackRuleAdd(rule, replaced) {
-  let id = rule.id;
-  pushHistory({
-    label: `rule “${rule.label}”`,
-    undo: async () => { await api(`/rules/${id}?campaign=${S.campaign}`, 'DELETE'); if (replaced) await api('/rules', 'POST', ruleBody(replaced)); await refresh(true); },
-    redo: async () => { id = (await api('/rules', 'POST', ruleBody(rule))).id; await refresh(true); },
-  });
-}
-/** Save a rule (manual/bubble/inspector/text). Clears a conflicting manual tweak so the rule is visible. */
-async function addRule(type, params, { source = 'manual', evidence = {}, label = '', clearTweak } = {}) {
-  const replaced = S.rules.find(r => sameKey(r, { type, params }));
-  const rule = await api('/rules', 'POST', { campaign: S.campaign, rule: { type, params, label, source, evidence } });
-  if (clearTweak && S.overrides[clearTweak.key]) delete S.overrides[clearTweak.key][clearTweak.id];
-  trackRuleAdd(rule, replaced);
-  App.newRuleId = rule.id;
-  await refresh(true);
-  announceRule(rule); save();
-  return rule;
-}
-function announceRule(rule) {
-  const strip = activeFormats().map(f => {
-    const rr = ruleResult(f.key, rule.id);
-    return `${f.width}×${f.height} ${!rr ? '–' : !rr.applies ? 'n/a' : rr.satisfied ? '✓' : '!'}`;
-  });
-  toast(`Rule saved: ${rule.label}`, { strip, action: 'Undo', onAction: undo, ms: 6000 });
-  App.flashFrames?.();
-}
-async function toggleRule(r) {
-  const flip = async v => { await api(`/rules/${r.id}?campaign=${S.campaign}`, 'PATCH', { enabled: v }); await refresh(true); };
-  try { await flip(!r.enabled); pushHistory({ label: `${r.enabled ? 'turn off' : 'turn on'} rule`, undo: () => flip(r.enabled), redo: () => flip(!r.enabled) }); }
-  catch (e) { toast(e.message, { error: true }); }
-}
-async function deleteRule(r) {
-  let id = r.id;
-  try {
-    await api(`/rules/${id}?campaign=${S.campaign}`, 'DELETE'); await refresh(true);
-    pushHistory({ label: 'delete rule', undo: async () => { id = (await api('/rules', 'POST', ruleBody(r))).id; await refresh(true); }, redo: async () => { await api(`/rules/${id}?campaign=${S.campaign}`, 'DELETE'); await refresh(true); } });
-    toast(`Deleted: ${r.label}`, { action: 'Undo', onAction: undo });
-  } catch (e) { toast(e.message, { error: true }); }
-}
-function currentWeight(role) { const r = S.rules.find(x => x.type === 'emphasis' && x.params.role === role && x.enabled); return r ? r.params.weight : 1; }
-function ruleFor(type, role) { return S.rules.find(x => x.type === type && x.enabled && (x.params.role === role)); }
-function rulesForRole(role) { return S.rules.filter(r => r.enabled && (r.params.role === role || r.params.source_role === role || r.params.target_role === role || r.params.role === '*')); }
 
 /* ───────── overrides (this frame only) ───────── */
 function setOverride(key, id, patch, label = 'frame tweak') {
@@ -340,47 +284,10 @@ function clearOverrides(key) { const before = snapshot(); delete S.overrides[key
 
 /* ───────── direct-manipulation edit flow ───────── */
 function beginEdit(kind, key, id) { const base = display(key); S.edit = { kind, key, id, before: clone(base), after: clone(base) }; }
-function cancelEdit(repaint = true) { S.edit = null; S.pending = null; hideNoticed(); if (repaint) App.paint('canvas'); }
+function cancelEdit(repaint = true) { S.edit = null; if (repaint) App.paint('canvas'); }
 /** A drag or nudge on the canvas is a tweak to that frame only (the other sizes keep their own layout). */
-async function inferEdit() { if (S.edit) keepNoticedForFrame(); }
-function describe(p) {
-  const n = activeFormats().length;
-  if (p.type === 'hide_small') {
-    const hit = activeFormats().filter(f => Math.min(f.width, f.height) < p.params.below).length;
-    return `Hides it in ${hit} of ${n} frames (this size and smaller)`;
-  }
-  return `Applies to all ${n} frames and future ones`;
-}
-function showNoticed(proposals, via) {
-  S.pending = { proposals, via };
-  const f = fmt(S.edit.key), t = S.edit.after.elements.find(x => x.id === S.edit.id);
-  const has = proposals.length > 0;
-  $('noticed-title').textContent = has ? 'Make this a rule?' : 'Keep this change?';
-  $('noticed-desc').textContent = has ? `You changed the ${lowerRole(roleOf(t))} in ${f.name}.` : 'This change doesn’t match a reusable rule. Keep it for this frame only?';
-  $('noticed-options').replaceChildren(...proposals.map((p, i) => el('label', { class: 'opt' },
-    el('input', { type: 'radio', name: 'proposal', value: i, checked: i === 0 }),
-    el('span', {}, el('b', { text: p.label }), el('small', { text: describe(p) })))));
-  $('noticed-all').hidden = !has;
-  $('noticed').hidden = false;
-  App.positionNoticed?.();
-  (has ? $('noticed-all') : $('noticed-one')).focus({ preventScroll: true });
-}
-function hideNoticed() { $('noticed').hidden = true; }
-async function saveNoticedRule() {
-  const P = S.pending, E = S.edit; if (!P || !E || !P.proposals.length) return;
-  const p = P.proposals[+(document.querySelector('input[name=proposal]:checked')?.value || 0)];
-  busy(true);
-  try {
-    const replaced = S.rules.find(r => sameKey(r, p));
-    const rule = (await api('/learn', 'POST', { before: E.before, after: E.after, moved_id: E.id, kind: E.kind, campaign: S.campaign, rule_type: p.type, params: p.params })).learned;
-    if (S.overrides[E.key]) delete S.overrides[E.key][E.id];
-    cancelEdit(false);
-    trackRuleAdd(rule, replaced); App.newRuleId = rule.id;
-    await refresh(true); announceRule(rule); save();
-  } catch (err) { toast(err.message, { error: true }); }
-  finally { busy(false); }
-}
-function keepNoticedForFrame() {
+async function inferEdit() { if (S.edit) keepForFrame(); }
+function keepForFrame() {
   const E = S.edit; if (!E) return;
   const t = E.after.elements.find(x => x.id === E.id);
   const patch = { x: t.x, y: t.y, width: t.width, height: t.height, hidden: !!t.hidden };
@@ -390,40 +297,12 @@ function keepNoticedForFrame() {
   setOverride(E.key, E.id, patch, E.kind === 'resize' ? 'resize' : 'move');
   toast(`Changed in ${fmt(E.key).name} only. The other sizes keep their own layout.`, { action: 'Undo', onAction: undo });
 }
-$('noticed-all').onclick = saveNoticedRule;
-$('noticed-one').onclick = keepNoticedForFrame;
-$('noticed-undo').onclick = () => cancelEdit();
-$('noticed').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.target.closest('button')) { e.preventDefault(); if (S.pending?.proposals.length) saveNoticedRule(); else keepNoticedForFrame(); }
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
-});
-
-/* ───────── element actions (inspector, bubbles, keyboard) ───────── */
+/* ───────── element actions (inspector, keyboard) ───────── */
 const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-/** Apply an action to element `id` in frame `key`. scope 'all' → rule; 'frame' → tweak for this frame only. */
-async function applyAction(key, id, action, value, scope = S.scope) {
+/** Apply an action to element `id` in frame `key`: a tweak to this frame only. */
+async function applyAction(key, id, action, value) {
   const d = display(key), t = d && d.elements.find(e => e.id === id); if (!t) return;
-  const role = roleOf(t), short = Math.min(d.canvas.width, d.canvas.height);
-  if (scope === 'all') {
-    try {
-      const ev = { canvas: d.canvas, element: id, via: action };
-      if (action === 'align') return await addRule('align', { role, align: value }, { source: 'edit', evidence: ev, clearTweak: { key, id } });
-      if (action === 'pin') {
-        if (value === 'none') { const r = ruleFor('pin', role); if (r) return await deleteRule(r); return toast('Not pinned'); }
-        return await addRule('pin', { role, corner: value }, { source: 'edit', evidence: ev, clearTweak: { key, id } });
-      }
-      if (action === 'size') {
-        const w = Math.round(Math.min(2, Math.max(.5, value)) * 100) / 100;
-        if (Math.abs(w - 1) < .01) { const r = ruleFor('emphasis', role); if (r) return await deleteRule(r); return; }
-        return await addRule('emphasis', { role, weight: w }, { source: 'edit', evidence: ev, clearTweak: { key, id } });
-      }
-      if (action === 'hide') {
-        if (value === false) { const r = ruleFor('hide_small', role); if (r) return await deleteRule(r); return; }
-        return await addRule('hide_small', { role, below: short + 1 }, { source: 'edit', evidence: ev, clearTweak: { key, id } });
-      }
-    } catch (e) { toast(e.message, { error: true }); }
-    return;
-  }
+  const short = Math.min(d.canvas.width, d.canvas.height);
   // this frame only
   const W = d.canvas.width, H = d.canvas.height, m = short * .06;
   if (action === 'align') {
@@ -614,7 +493,7 @@ function closeMenus() { for (const [b, m] of MENUS) { $(m).hidden = true; $(b).s
 document.addEventListener('pointerdown', e => { if (!e.target.closest('.menu') && !MENUS.some(([b]) => e.target.closest('#' + b))) closeMenus(); });
 const mi = (icon, label, onclick, kbd) => el('button', { role: 'menuitem', onclick: () => { closeMenus(); onclick(); } }, icon ? ic(icon) : null, el('span', { text: label }), kbd ? el('kbd', { text: kbd }) : null);
 registerMenu('main-menu-btn', 'main-menu', async () => {
-  let tpls = []; try { tpls = await api('/templates'); } catch { /* offline */ }
+  let tpls = []; try { tpls = await apiOnce('/templates'); } catch { /* offline */ }
   $('main-menu').replaceChildren(
     mi('home', 'Back to home', showHome),
     el('div', { class: 'menu-sep' }), el('div', { class: 'menu-label', text: 'New campaign' }),
@@ -644,19 +523,8 @@ $('think-btn').onclick = async () => {
   save.cancel(); await saveNow(); location.href = '/how#from=studio';
 };
 $('sc-close').onclick = () => $('shortcuts').close();
-$('bench-close').onclick = () => $('bench').close();
 $('project-name').addEventListener('change', e => { S.name = e.target.value.trim() || 'Untitled campaign'; e.target.value = S.name; document.title = `${S.name} · Chameleon`; save(); });
 $('project-name').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); });
-async function runBench() {
-  $('bench').showModal(); const out = $('bench-out'); out.textContent = 'Running 96 held-out cases…';
-  try {
-    const b = await api('/benchmark');
-    const rows = Object.entries(b.totals).map(([k, m]) => el('tr', {}, el('td', { text: k.replaceAll('_', ' ') }), el('td', { text: `${m.relationships_preserved}/${m.relationships_total}` }), el('td', { text: m.small_text }), el('td', { text: m.overlaps })));
-    out.replaceChildren(el('table', {}, el('thead', {}, el('tr', {}, ...['Method', 'Taught rule kept', 'Text <12px', 'Overlaps'].map(h => el('th', { text: h })))), el('tbody', {}, rows)),
-      el('p', { text: `${b.cases} synthetic cases (${b.designs} variants × ${b.formats} formats). A regression check of rule transfer, not a study of design quality.` }));
-  } catch (e) { out.textContent = e.message; }
-}
-
 window.addEventListener('popstate', () => {
   const m = location.hash.match(/c=([\w-]+)/);
   if (m && m[1] !== S.campaign) openProject(m[1]);

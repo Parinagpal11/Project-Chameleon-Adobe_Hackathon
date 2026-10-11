@@ -16,22 +16,10 @@ class HTTPTests(unittest.TestCase):
                 with opener.open(request,timeout=10) as response:return json.load(response)
             try:
                 self.assertEqual(api('/health')['status'],'ok')
-                # the older rule-memory API still works on the studio's original sample format
-                d=json.loads((ROOT/'examples'/'coffee_ad.json').read_text());result=api('/transform','POST',{'design':d,'target':{'width':1080,'height':1920},'campaign':'demo'})
-                before=result['best']['design'];after=json.loads(json.dumps(before));els={e['id']:e for e in after['elements']}
-                els['offer']['y']=els['cta']['y']-els['offer']['height']-10
-                edit={'before':before,'after':after,'moved_id':'offer'}
-                self.assertTrue(api('/infer-edit','POST',edit)['proposals'])
-                api('/learn-edit','POST',{**edit,'campaign':'demo','source_role':'offer','target_role':'cta','relation':'ABOVE'})
-                result=api('/transform','POST',{'design':d,'target':{'width':1584,'height':396},'campaign':'demo'})
-                self.assertTrue(result['best']['relationship_results'][0]['satisfied'])
-                self.assertFalse(result['baseline']['relationship_results'][0]['satisfied'])
-                self.assertEqual(len(api('/rules?campaign=demo')),1)
-                self.assertEqual(api('/rules?campaign=other'),[])
-                self.assertEqual(api('/benchmark')['cases'],96)
-                for path in ['/','/assets/core.js','/assets/canvas.js','/assets/panels.js','/assets/dnd.js','/assets/tour.js','/assets/home.js','/assets/icons.js','/assets/app.css','/assets/tour.css','/assets/render.js','/assets/zip.js','/assets/graph-render.js','/assets/studio-graph.js','/templates','/example?name=summer_sale']:
+                for path in ['/','/assets/core.js','/assets/canvas.js','/assets/panels.js','/assets/dnd.js','/assets/tour.js','/assets/home.js','/assets/icons.js','/assets/app.css','/assets/tour.css','/assets/fonts.css','/assets/silk.js','/assets/zip.js','/assets/graph-render.js','/assets/studio-graph.js','/templates','/example?name=summer_sale']:
                     with opener.open(base+path) as response:self.assertEqual(response.status,200)
-                with self.assertRaises(HTTPError):api('/transform','POST',{'design':{},'target':{'width':0,'height':0}})
+                with self.assertRaises(HTTPError):api('/adapt','POST',{'design':{},'targets':[{'width':0,'height':0}]})
+                d=json.loads((ROOT/'examples'/'coffee_ad.json').read_text())
                 # the Studio's path: a template (graph with a real photo) laid out by the engine, and a saved project
                 tpls=api('/templates');self.assertGreaterEqual(len(tpls),3)
                 g=api('/example?name='+tpls[0]['id']);self.assertIn('nodes',g)
@@ -42,7 +30,10 @@ class HTTPTests(unittest.TestCase):
                 api('/project?campaign=studio-test','PUT',{'name':'Snow','design':g,'state':{'overrides':{}}})
                 self.assertEqual(api('/project?campaign=studio-test')['design']['nodes'][0]['id'],g['nodes'][0]['id'])
                 with self.assertRaises(HTTPError):api('/project?campaign=studio-test','PUT',{'name':'Bad','design':{'nodes':'x'}})
-                api('/rules?campaign=demo','DELETE');self.assertEqual(api('/rules?campaign=demo'),[])
+                self.assertEqual(api('/projects')[0]['campaign'],'studio-test')
+                api('/project?campaign=studio-test','DELETE');self.assertEqual(api('/projects'),[])
+                for gone in ['/transform','/rules','/benchmark']:
+                    with self.assertRaises(HTTPError):api(gone,'POST',{'design':g})
             finally:
                 server.shutdown();server.server_close();thread.join()
                 if prev is None:os.environ.pop('CHAMELEON_DB',None)

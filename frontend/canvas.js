@@ -84,7 +84,7 @@
         const canvas = el('canvas', { 'aria-hidden': 'true' }), div = el('div', { class: 'frame', 'data-key': k }, canvas);
         WORLD.append(div); V.frames[k] = { div, canvas };
         const lab = el('div', { class: 'frame-label', 'data-key': k, role: 'button', tabindex: '-1' });
-        lab.addEventListener('pointerdown', e => { e.stopPropagation(); if (S.pending) return flagPending(); select({ key: k, id: null }); });
+        lab.addEventListener('pointerdown', e => { e.stopPropagation(); select({ key: k, id: null }); });
         lab.addEventListener('dblclick', e => { e.stopPropagation(); App.focusFrame(k); });
         OV.append(lab); V.labels[k] = lab;
       }
@@ -121,28 +121,11 @@
     if (e && !e.hidden && e.width > 0 && V.layout[S.sel.key]) {
       const b = elBox(S.sel.key, e); Object.assign(sb.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' });
       $('sel-tag').textContent = niceRole(roleOf(e));
-      sb.querySelectorAll('.handle').forEach(h => { h.hidden = e.type === 'image' || !!S.pending; });
+      sb.querySelectorAll('.handle').forEach(h => { h.hidden = e.type === 'image'; });
       sb.hidden = false;
     } else sb.hidden = true;
-    if (!$('noticed').hidden) positionNoticed();
   }
   function elBox(key, e) { const l = V.layout[key], p = toScreen(l.x + e.x, l.y + e.y); return { x: p.x, y: p.y, w: e.width * V.zoom, h: e.height * V.zoom }; }
-  function positionNoticed() {
-    const n = $('noticed'); if (!S.edit) return;
-    const e = S.edit.after.elements.find(x => x.id === S.edit.id); if (!e) return;
-    const l = V.layout[S.edit.key]; if (!l) return;
-    const b = e.width > 0 ? elBox(S.edit.key, e) : { x: toScreen(l.x, l.y).x, y: toScreen(l.x, l.y).y, w: l.w * V.zoom, h: 0 };
-    const vr = VP.getBoundingClientRect(), nw = n.offsetWidth || 292, nh = n.offsetHeight || 200;
-    let x = b.x + b.w + 14, y = b.y;
-    if (x + nw > vr.width - safeRight()) x = b.x - nw - 14;
-    if (x < 8) x = Math.min(vr.width - nw - 8, b.x);
-    if (x === b.x) y = b.y + b.h + 12;
-    y = Math.max(70, Math.min(vr.height - nh - 80, y));
-    n.style.left = x + 'px'; n.style.top = y + 'px';
-  }
-  function safeRight() { const r = VP.getBoundingClientRect(), rp = $('right').getBoundingClientRect(); return rp.left < r.width && rp.right <= r.width + 2 ? r.width - rp.left + 8 : 8; }
-  App.positionNoticed = positionNoticed;
-
   App.flashFrames = () => {
     Object.values(V.frames).forEach((f, i) => setTimeout(() => { f.div.classList.remove('flash'); void f.div.offsetWidth; f.div.classList.add('flash'); }, i * 50));
   };
@@ -159,7 +142,7 @@
 
   /* ── selection ── */
   function select(sel) {
-    if (S.edit && !S.pending) cancelEdit(false);
+    if (S.edit) cancelEdit(false);
     S.sel = sel; App.paint('selection');
   }
   App.select = select;
@@ -180,15 +163,9 @@
     const e = curDesign(key)?.elements.find(x => x.id === id); if (!e) return null;
     const r = VP.getBoundingClientRect(), b = elBox(key, e); return { x: b.x + r.left, y: b.y + r.top, w: b.w, h: b.h };
   };
-  function flagPending() {
-    const n = $('noticed'); n.style.animation = 'none'; void n.offsetWidth; n.style.animation = '';
-    toast('Save, keep or undo your last change first.');
-  }
-  App.flagPending = flagPending;
-
   /* ── pointer ── */
   VP.addEventListener('wheel', e => {
-    if (S.view !== 'editor' || e.target.closest('.noticed')) return;
+    if (S.view !== 'editor') return;
     e.preventDefault();
     const p = vpPoint(e);
     if (e.ctrlKey || e.metaKey) zoomAt(V.zoom * Math.exp(-e.deltaY * (e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 50 ? .02 : .0025)), p.x, p.y);
@@ -196,17 +173,16 @@
   }, { passive: false });
 
   VP.addEventListener('pointerdown', e => {
-    if (e.target.closest('.frame-label, .noticed, .handle')) return;
+    if (e.target.closest('.frame-label, .handle')) return;
     VP.focus({ preventScroll: true });
     closeMenus(); App.closeAddFrame?.();
     const p = vpPoint(e);
     if (e.button === 1 || S.tool === 'hand' || space) { startPan(e, p); return; }
     if (e.button !== 0) return;
     const h = hit(p.x, p.y);
-    if (S.pending) { if (h && S.edit && h.key === S.edit.key && h.id === S.edit.id) { /* allow continuing to drag same element */ } else return flagPending(); }
     if (!h) { select(null); startPan(e, p); return; }
     if (!h.id) { select({ key: h.key, id: null }); return; }
-    if (!S.pending) select({ key: h.key, id: h.id });
+    select({ key: h.key, id: h.id });
     if (h.el.type === 'image') return;
     const base = (S.edit && S.edit.key === h.key ? S.edit.after : display(h.key)).elements.find(x => x.id === h.id);
     drag = { kind: 'move', key: h.key, id: h.id, sx: p.x, sy: p.y, ox: base.x, oy: base.y, moved: false, pid: e.pointerId };
@@ -216,7 +192,6 @@
   $('sel-box').addEventListener('pointerdown', e => {
     const h = e.target.closest('.handle'); if (!h || !S.sel?.id) return;
     e.stopPropagation(); e.preventDefault();
-    if (S.pending && !(S.edit && S.edit.id === S.sel.id && S.edit.kind === 'resize')) return flagPending();
     if (!S.edit) beginEdit('resize', S.sel.key, S.sel.id);
     const t = S.edit.after.elements.find(x => x.id === S.sel.id), p = vpPoint(e);
     drag = { kind: 'resize', corner: h.dataset.h, key: S.sel.key, id: S.sel.id, sx: p.x, sy: p.y, x: t.x, y: t.y, w: t.width, h: t.height, fs: t.fontSize, moved: false, pid: e.pointerId };
@@ -232,7 +207,7 @@
     if (drag.kind === 'pan') { V.x = drag.ox + p.x - drag.sx; V.y = drag.oy + p.y - drag.sy; apply(false); return; }
     const dx = (p.x - drag.sx) / V.zoom, dy = (p.y - drag.sy) / V.zoom;
     if (!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) < 3) return;
-    if (!drag.moved) { drag.moved = true; $('hover-box').hidden = true; if (!S.edit) beginEdit('move', drag.key, drag.id); hideNoticed(); S.pending = null; }
+    if (!drag.moved) { drag.moved = true; $('hover-box').hidden = true; if (!S.edit) beginEdit('move', drag.key, drag.id); }
     const t = S.edit.after.elements.find(x => x.id === drag.id), W = S.edit.after.canvas.width, H = S.edit.after.canvas.height;
     if (drag.kind === 'move') {
       t.x = Math.max(0, Math.min(W - t.width, drag.ox + dx)); t.y = Math.max(0, Math.min(H - t.height, drag.oy + dy));
@@ -250,7 +225,7 @@
     if (!drag) return;
     const d = drag; drag = null; VP.classList.remove('panning');
     if (d.kind === 'pan') return;
-    if (!d.moved) { if (S.edit && !S.pending) cancelEdit(false); return; }
+    if (!d.moved) { if (S.edit) cancelEdit(false); return; }
     if (d.kind === 'resize') S.edit.kind = 'resize';
     inferEdit();
   }
@@ -285,14 +260,12 @@
   function nudge(dx, dy) {
     const key = S.sel.key, id = S.sel.id;
     const cur = curDesign(key).elements.find(x => x.id === id); if (!cur || cur.type === 'image' || cur.hidden) return;
-    if (S.pending && !(S.edit && S.edit.id === id && S.edit.kind === 'move')) return flagPending();
     if (!S.edit) beginEdit('move', key, id);
-    if (S.pending) { S.pending = null; hideNoticed(); }
     const t = S.edit.after.elements.find(x => x.id === id);
     t.x = Math.max(0, Math.min(S.edit.after.canvas.width - t.width, t.x + dx));
     t.y = Math.max(0, Math.min(S.edit.after.canvas.height - t.height, t.y + dy));
     drawFrame(key); positionOverlay();
-    clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (S.edit && !S.pending) inferEdit(); }, 650);
+    clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (S.edit) inferEdit(); }, 650);
   }
   /** Tab / Shift+Tab move through a frame's elements; past the last (or first) one, focus leaves the canvas. */
   function cycle(dir) {
@@ -324,7 +297,7 @@
     if (k === 'v' && !mod) { setTool('move'); return; }
     if (k === 'h' && !mod) { setTool('hand'); return; }
     if (e.key === 'Escape') {
-      if (S.pending || S.edit) { cancelEdit(); return; }
+      if (S.edit) { cancelEdit(); return; }
       if (App.tourOpen?.()) return;
       if (S.sel?.id) select({ key: S.sel.key, id: null }); else if (S.sel) select(null);
       return;
@@ -334,8 +307,8 @@
     if (!S.sel?.id) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
-      const key = S.sel.key, id = S.sel.id, t = curDesign(key).elements.find(x => x.id === id), f = fmt(key);
-      applyAction(key, id, 'hide', true, 'frame');
+      const key = S.sel.key, id = S.sel.id, f = fmt(key);
+      applyAction(key, id, 'hide', true);
       toast(`Hidden in ${f.name} only`, { action: 'Undo', onAction: undo, ms: 6000 });
       select({ key, id: null });
       return;

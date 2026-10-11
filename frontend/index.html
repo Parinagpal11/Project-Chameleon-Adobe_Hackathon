@@ -10,9 +10,9 @@
     if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     document.documentElement.dataset.theme = t; })();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Poppins:wght@600;800&family=Playfair+Display:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Montserrat:wght@500;600;700;800&family=DM+Serif+Display&display=swap">
+<link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts.css">
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/tour.css">
 </head>
@@ -90,16 +90,6 @@
       </div>
       <div id="drop-hint" class="drop-hint" hidden></div>
     </div>
-    <div id="noticed" class="noticed" role="dialog" aria-labelledby="noticed-title" hidden>
-      <div class="noticed-head"><svg class="i accent-ic"><use href="#i-sparkle"/></svg><h2 id="noticed-title">Make this a rule?</h2></div>
-      <p id="noticed-desc" class="muted small"></p>
-      <div id="noticed-options" class="noticed-options" role="radiogroup" aria-label="Rule to save"></div>
-      <div class="noticed-actions">
-        <button class="btn primary sm" id="noticed-all">All frames <kbd>↵</kbd></button>
-        <button class="btn sm" id="noticed-one">This frame only</button>
-        <button class="btn ghost sm" id="noticed-undo" aria-label="Undo change (Esc)">Undo</button>
-      </div>
-    </div>
   </main>
 
   <header class="ed-top">
@@ -158,26 +148,8 @@
   <aside id="right" class="panel right" aria-label="Inspector">
     <div class="tabs" role="tablist" aria-label="Inspector">
       <button role="tab" id="tab-design" aria-controls="pane-design" aria-selected="true">Design</button>
-      <button role="tab" id="tab-rules" aria-controls="pane-rules" aria-selected="false" tabindex="-1" hidden>Rules <span class="badge" id="rules-count">0</span></button>
     </div>
     <section id="pane-design" role="tabpanel" aria-labelledby="tab-design" class="pane"></section>
-    <section id="pane-rules" role="tabpanel" aria-labelledby="tab-rules" class="pane" hidden>
-      <form id="rule-form" class="rule-form" autocomplete="off">
-        <label for="rule-input" class="label">Describe a rule</label>
-        <div class="input-wrap"><svg class="i lead"><use href="#i-wand"/></svg><input id="rule-input" placeholder="e.g. logo top-left, hide offer on small banners" maxlength="500"><kbd>⌘K</kbd></div>
-        <div class="chips" id="examples" aria-label="Examples"><button type="button" class="chip">Logo top-left</button><button type="button" class="chip">Center the headline</button><button type="button" class="chip">Make the CTA bigger</button><button type="button" class="chip">Hide the offer on small banners</button></div>
-        <div id="parse-result" class="parse-result" aria-live="polite"></div>
-      </form>
-      <div class="group">
-        <div class="pane-head"><span class="label">Rule bubbles</span><span class="hint">Drag onto an element, or select one and click</span></div>
-        <div class="bubbles" id="bubbles"></div>
-      </div>
-      <div class="group">
-        <div class="pane-head"><span class="label">Campaign rules</span></div>
-        <ul id="rules-list" class="rules-list"></ul>
-        <div id="rules-empty" class="empty"><b>No rules yet</b><span>Drag an element on the canvas, use a bubble, or type a rule above.</span></div>
-      </div>
-    </section>
   </aside>
 
   <!-- bottom tool dock -->
@@ -193,8 +165,6 @@
       <button role="menuitem" data-zoom="0.5">50%</button><button role="menuitem" data-zoom="1">100%<kbd>⌘0</kbd></button><button role="menuitem" data-zoom="2">200%</button>
     </div>
     <button class="tool" id="zoom-in" aria-label="Zoom in" title="Zoom in · ⌘+"><svg class="i"><use href="#i-zoomIn"/></svg></button>
-    <span class="sep" aria-hidden="true"></span>
-    <button class="dock-cmd" id="dock-cmd" hidden><svg class="i"><use href="#i-wand"/></svg><span>Type a rule…</span><kbd>⌘K</kbd></button>
   </div>
 
   <div id="add-frame" class="popover" role="dialog" aria-label="Add frame" hidden>
@@ -219,7 +189,7 @@
 
 <div id="tour" class="tour" role="dialog" aria-modal="false" aria-labelledby="tour-title" hidden>
   <div class="tour-body">
-    <div class="tour-meta"><span id="tour-step" class="label"></span><button class="icon-btn sm" id="tour-pause" aria-label="Pause animation" title="Pause animation"><svg class="i"><use href="#i-pause"/></svg></button></div>
+    <div class="tour-meta"><span id="tour-step" class="label"></span></div>
     <h2 id="tour-title"></h2>
     <p id="tour-text"></p>
     <p id="tour-try" class="tour-try"></p>
@@ -237,21 +207,16 @@
       <dt><kbd>⌘</kbd> + scroll</dt><dd>Zoom</dd><dt><kbd>⇧1</kbd></dt><dd>Zoom to fit</dd><dt><kbd>⇧2</kbd></dt><dd>Zoom to selection</dd><dt><kbd>⌘0</kbd></dt><dd>Zoom to 100%</dd></dl></div>
     <div><h3>Editing</h3><dl>
       <dt><kbd>Tab</kbd></dt><dd>Next element in frame</dd><dt><kbd>←↑→↓</kbd></dt><dd>Nudge (<kbd>⇧</kbd> = 10)</dd>
-      <dt><kbd>Delete</kbd></dt><dd>Hide in this size</dd><dt><kbd>Esc</kbd></dt><dd>Deselect / undo pending</dd>
+      <dt><kbd>Delete</kbd></dt><dd>Hide in this size</dd><dt><kbd>Esc</kbd></dt><dd>Deselect</dd>
       <dt><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></dt><dd>Undo / redo</dd></dl></div>
     <div><h3>Campaign</h3><dl>
       <dt><kbd>⌘E</kbd></dt><dd>Export all</dd><dt><kbd>?</kbd></dt><dd>This sheet</dd></dl></div>
   </div>
 </dialog>
 
-<dialog id="bench" class="modal" aria-labelledby="bench-title">
-  <div class="modal-head"><h2 id="bench-title">Transfer benchmark</h2><button class="icon-btn" id="bench-close" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
-  <div id="bench-out" class="bench-out"></div>
-</dialog>
 
 <script src="/assets/icons.js"></script>
 <script src="/assets/zip.js"></script>
-<script src="/assets/render.js"></script>
 <script src="/assets/graph-render.js"></script>
 <script src="/assets/studio-graph.js"></script>
 <script src="/assets/core.js"></script>

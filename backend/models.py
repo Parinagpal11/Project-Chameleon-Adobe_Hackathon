@@ -1,8 +1,6 @@
 from typing import Literal, Any
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-CAMPAIGN = dict(default='coffee-launch', min_length=1, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
-RULE_TYPES = ('order', 'pin', 'align', 'emphasis', 'hide_small')
 
 
 class StrictModel(BaseModel):
@@ -68,78 +66,8 @@ class Design(StrictModel):
         return self
 
 
-class TransformRequest(StrictModel):
-    campaign: str = Field(**CAMPAIGN)
-    use_memory: bool = True
-    design: Design
-    target: Canvas
-
-
 class Target(Canvas):
     name: str = Field(default='', max_length=60)
-
-
-class BatchRequest(StrictModel):
-    campaign: str = Field(**CAMPAIGN)
-    use_memory: bool = True
-    design: Design
-    targets: list[Target] = Field(min_length=1, max_length=30)
-
-
-class CorrectionRequest(StrictModel):
-    source: str = Field(min_length=1, max_length=100)
-    target: str = Field(min_length=1, max_length=100)
-    relation: Literal['BELOW', 'ABOVE']
-
-    @model_validator(mode='after')
-    def distinct(self):
-        if self.source == self.target:
-            raise ValueError('Choose two different elements')
-        return self
-
-
-class InferRequest(StrictModel):
-    before: Design
-    after: Design
-    moved_id: str
-    kind: Literal['move', 'resize', 'hide'] = 'move'
-
-
-class LearnEditRequest(InferRequest):
-    """Legacy order-rule confirmation (kept for API compatibility)."""
-    campaign: str = Field(**CAMPAIGN)
-    source_role: str
-    target_role: str
-    relation: Literal['ABOVE', 'BELOW']
-
-
-class LearnProposalRequest(InferRequest):
-    """Confirm any proposal; the server re-derives it from the edit before saving."""
-    campaign: str = Field(**CAMPAIGN)
-    rule_type: Literal[RULE_TYPES]
-    params: dict[str, Any]
-
-
-class RuleIn(StrictModel):
-    type: Literal[RULE_TYPES]
-    params: dict[str, Any]
-    label: str = Field(default='', max_length=200)
-    source: Literal['edit', 'text', 'manual'] = 'manual'
-    evidence: dict[str, Any] = Field(default_factory=dict)
-
-
-class AddRuleRequest(StrictModel):
-    campaign: str = Field(**CAMPAIGN)
-    rule: RuleIn
-
-
-class RulePatch(StrictModel):
-    enabled: bool
-
-
-class ParseRuleRequest(StrictModel):
-    text: str = Field(min_length=1, max_length=500)
-    roles: list[str] = Field(default_factory=list, max_length=50)
 
 
 class ProjectSave(StrictModel):

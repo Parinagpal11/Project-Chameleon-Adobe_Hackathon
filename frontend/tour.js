@@ -73,7 +73,7 @@
     { title: 'Export every size at once', text: 'One click gives you a ZIP with a PNG for every size. That’s the tour. We’ll put back everything we changed.',
       run: async () => {}, spot: () => $('export-all') },
   ];
-  App.TOUR_STEPS = STEPS;
+  App.TOUR_STEPS = STEPS;   // read by the end-to-end test
 
   let idx = 0, busyStep = false;
   function place(s) {
@@ -123,11 +123,9 @@
   };
   App.closeTour = () => { if (!T.hidden) close(false); };
   App.tourOpen = () => !T.hidden;
-  App.mountDemo = () => {};
   $('tour-next').onclick = () => { if (idx === STEPS.length - 1) close(); else show(idx + 1); };
   $('tour-back').onclick = () => { if (idx > 0) show(idx - 1); };
   $('tour-skip').onclick = () => close();
-  $('tour-pause').hidden = true;
   T.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.stopPropagation(); close(); }
     if (e.key === 'ArrowRight' && e.target.tagName !== 'INPUT') { e.preventDefault(); if (!$('tour-next').disabled) $('tour-next').click(); }
@@ -135,5 +133,4 @@
   });
   window.addEventListener('resize', debounce(() => { if (!T.hidden) place(STEPS[idx]); }, 80));
   $('tour-btn').onclick = () => App.startTour(0);
-  App.openGuides = () => App.startTour(0);
 })();

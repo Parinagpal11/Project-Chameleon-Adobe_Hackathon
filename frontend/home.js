@@ -1,26 +1,21 @@
-/* Chameleon Studio v3 — home: new campaign, templates, recents. Boots the app. */
+/* Chameleon Studio — home: the live demo, templates, recent campaigns. Boots the app. */
 'use strict';
 (function () {
   function thumb(design, assets, box = [210, 132]) {
-    const c = el('canvas', { 'aria-hidden': 'true' });
-    if (Array.isArray(design.nodes)) {
-      const d = GV.resolved(design, assets);
-      window.GR.draw(c, d, { scale: Math.min(box[0] / d.page.width, box[1] / d.page.height), dpr: DPR });
-    } else {   // a campaign saved before the switch to graph designs (it converts when opened)
-      const d = clone(design); d.brand = Object.assign({}, R.DEFAULT_BRAND, d.brand || {});
-      R.draw(c, d, { assets: assets || {}, scale: Math.min(box[0] / d.canvas.width, box[1] / d.canvas.height), dpr: DPR });
-    }
+    const c = el('canvas', { 'aria-hidden': 'true' }), d = GV.resolved(design, assets);
+    window.GR.draw(c, d, { scale: Math.min(box[0] / d.page.width, box[1] / d.page.height), dpr: DPR });
     return c;
   }
   /* ───────── live examples: the engine runs on the sample and the page shows what it did ───────── */
   const plain = rs => (rs || []).filter(r => !/^Tier \d/.test(r));
   const drawG = (g, w, h) => { const c = el('canvas', { 'aria-hidden': 'true' }); window.GR.draw(c, g, { scale: Math.min(w / g.page.width, h / g.page.height), dpr: DPR }); return c; };
   let live = null;
+  const sample = () => apiOnce('/example?name=snow_cabins');
+  const SIZES = [[1080, 1920, 'Instagram Story'], [1200, 628, 'Feed post'], [1584, 396, 'LinkedIn banner'], [300, 250, 'Medium rectangle'], [1080, 1080, 'Instagram Post'], [728, 90, 'Leaderboard']];
   async function liveSample() {
     if (live) return live;
     live = (async () => {
-      const d = await api('/example?name=snow_cabins');
-      const sizes = [[1080, 1920, 'Instagram Story'], [1200, 628, 'Feed post'], [1584, 396, 'LinkedIn banner'], [300, 250, 'Medium rectangle'], [1080, 1080, 'Instagram Post'], [728, 90, 'Leaderboard']];
+      const d = await sample(), sizes = SIZES;
       const r = await api('/adapt', 'POST', { design: d, targets: sizes.map(([width, height, name]) => ({ width, height, name })) });
       r.results.forEach(x => { x.design = GV.withSrc(x.design, d, {}); (x.alternatives || []).forEach(a => { a.design = GV.withSrc(a.design, d, {}); }); });
       return { d, sizes, r };
@@ -29,25 +24,28 @@
     return live;
   }
 
-  /** The sample laid out for several sizes, one after another, with the engine's own reason for each. */
+  /** The sample laid out for several sizes, one after another, with the engine's own reason for each.
+      The original shows as soon as it arrives; the other sizes join when the engine has laid them out. */
   let demoTimer = null;
   async function mountResizeDemo(host) {
     if (host.querySelector('.rd-slide')) return;
+    const H = host.clientHeight || 360, W = host.clientWidth || 520;
+    const slide = it => el('figure', { class: 'rd-slide' }, drawG(it.g, W * .78, H * .78), el('figcaption', { text: it.label }));
+    const caption = it => { const why = $('home-demo-why'); if (why) why.replaceChildren(el('i', { class: 'why-dot', 'aria-hidden': 'true' }), el('span', {}, el('b', { text: it.label.split(' · ')[0] + ': ' }), it.why)); };
     try {
-      const { d, sizes, r } = await liveSample();
-      const items = [{ g: d, label: 'Original · 1080×1350', why: 'Your design, as you made it.' },
-        ...r.results.slice(0, 4).map((x, i) => ({ g: x.design, label: `${sizes[i][2]} · ${sizes[i][0]}×${sizes[i][1]}`, why: plain(x.reasons)[0] || '' }))];
-      const H = host.clientHeight || 360, W = host.clientWidth || 520;
-      const slides = items.map(it => el('figure', { class: 'rd-slide' }, drawG(it.g, W * .78, H * .78), el('figcaption', { text: it.label })));
-      host.replaceChildren(...slides);
-      let i = 0;
+      const d = await sample();
+      const first = { g: d, label: 'Original · 1080×1350', why: 'Your design, as you made it.' };
+      if (!host.querySelector('.rd-slide')) { const s0 = slide(first); host.replaceChildren(s0); requestAnimationFrame(() => s0.classList.add('on')); caption(first); }
+      const { sizes, r } = await liveSample();
+      const items = [first, ...r.results.slice(0, 4).map((x, i) => ({ g: x.design, label: `${sizes[i][2]} · ${sizes[i][0]}×${sizes[i][1]}`, why: plain(x.reasons)[0] || '' }))];
+      const slides = [host.querySelector('.rd-slide'), ...items.slice(1).map(slide)];
+      host.append(...slides.slice(1));
+      let i = 1;
       const show = () => {
         slides.forEach((s, j) => s.classList.toggle('on', j === i));
-        const why = $('home-demo-why');
-        if (why) why.replaceChildren(el('i', { class: 'why-dot', 'aria-hidden': 'true' }), el('span', {}, el('b', { text: items[i].label.split(' · ')[0] + ': ' }), items[i].why));
+        caption(items[i]);
         i = (i + 1) % slides.length;
       };
-      show();
       clearTimeout(demoTimer);
       if (!REDUCED.matches) { const loop = () => { demoTimer = setTimeout(() => { if (S.view === 'home') show(); loop(); }, 3200); }; loop(); }
     } catch { host.replaceChildren(el('span', { class: 'rd-wait', text: 'The live example needs the Chameleon server.' })); }
@@ -109,8 +107,8 @@
   async function renderTemplates() {
     const host = $('templates');
     try {
-      const list = await api('/templates');
-      const designs = await Promise.all(list.map(t => api('/example?name=' + t.id).catch(() => null)));
+      const list = await apiOnce('/templates');
+      const designs = await Promise.all(list.map(t => apiOnce('/example?name=' + t.id).catch(() => null)));
       host.replaceChildren(...list.map((t, i) => el('div', { class: 'card' },
         el('div', { class: 'card-thumb' }, designs[i] ? thumb(designs[i]) : null),
         el('div', { class: 'card-body' }, el('div', { style: 'min-width:0' }, el('div', { class: 'card-title', text: t.name }), el('div', { class: 'card-sub', text: t.description }))),
@@ -129,15 +127,23 @@
         ev.stopPropagation(); if (!confirm(`Delete “${p.name}”? This can’t be undone.`)) return;
         await api('/project?campaign=' + p.campaign, 'DELETE'); renderRecents();
       } }, ic('trash'));
-      api('/project?campaign=' + p.campaign).then(full => th.append(thumb(full.design, full.assets))).catch(() => {});
+      api('/project?campaign=' + p.campaign).then(async full => th.append(thumb(await toGraph(full.design), full.assets))).catch(() => {});   // older campaigns convert first
       return el('div', { class: 'card' }, th,
         el('div', { class: 'card-body' }, el('div', { style: 'min-width:0' }, el('div', { class: 'card-title', text: p.name }), el('div', { class: 'card-sub', text: `Edited ${relTime(p.updated)}` })), el('span', { class: 'card-menu' }, menuBtn)),
         el('button', { class: 'card-open', 'aria-label': `Open ${p.name}`, onclick: () => openProject(p.campaign) }));
     }));
   }
+  /** Run fn when el comes near the screen (the parts below the fold wait until someone scrolls toward them). */
+  function whenNear(node, fn) {
+    if (!node || !('IntersectionObserver' in window)) return fn();
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); fn(); } }, { rootMargin: '400px 0px' });
+    io.observe(node);
+  }
   App.renderHome = function () {
-    renderTemplates(); renderRecents();
-    mountResizeDemo($('home-demo')); mountDiff();
+    mountResizeDemo($('home-demo'));          // the hero first
+    whenNear($('diff-grid'), mountDiff);
+    whenNear($('templates'), renderTemplates);
+    whenNear($('recents'), renderRecents);
   };
   $('new-sample').onclick = () => startTemplate('snow_cabins');
   $('home-files').addEventListener('change', e => { const files = [...e.target.files]; e.target.value = ''; App.handleFiles(files); });

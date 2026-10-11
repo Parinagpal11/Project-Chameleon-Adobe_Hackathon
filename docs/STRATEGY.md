@@ -153,7 +153,7 @@ One Python engine behind one API; everything else is a client of it. This keeps 
 ```
 Clients:   Companion tool (judge mode + studio)  |  Evaluation runner  |  Express add-on (later)
                          \                 |                 /
-API:                      FastAPI  —  /adapt  /analyze  /learn  /rules  /eval/report
+API:                      FastAPI  —  /adapt  /analyze  /convert  /eval
                                             |
 Engine:    1 Understand → 2 Plan (tier) → 3 Solve (constraints) → 4 Score → 5 Explain & learn
                                             |
@@ -173,7 +173,7 @@ Services:  OpenCV saliency/faces  |  Pillow font metrics  |  SQLite (projects, r
 | Infrastructure | One-command run locally; Docker image; hosted demo (Render or Fly) for judges | Judges can click a link |
 | Quality | Unit tests per stage, golden-image tests for the test set, browser E2E, GitHub Actions CI | Shows engineering discipline |
 
-Key endpoints: `POST /adapt` (design + sizes → layouts, scores, reasons), `POST /analyze` (design → groups, grid, roles, subject for the X-ray), `POST /learn` and `/rules` (fixes → rules), `GET /eval/report`.
+Key endpoints: `POST /adapt` (design + sizes → layouts, scores, reasons), `POST /analyze` (design → groups, grid, roles, subject for the X-ray), `GET /eval` (test-set scores; the page is `/report`).
 
 ## 8. Evaluation: how we prove it works
 

@@ -1,0 +1,11 @@
+/* Typefaces, served with the app (no third-party request, works offline). A face downloads only when
+   something on the page uses it, so the design typefaces cost nothing until a design picks one.
+   All are SIL Open Font License 1.1 (latin subsets from Fontsource). */
+@font-face { font-family: 'Inter'; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fonts/inter-latin-wght-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-style: normal; font-display: swap; font-weight: 200 800; src: url(fonts/bricolage-grotesque-latin-opsz-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Montserrat'; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fonts/montserrat-latin-wght-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-display: swap; font-weight: 300 700; src: url(fonts/space-grotesk-latin-wght-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Playfair Display'; font-style: normal; font-display: swap; font-weight: 400 900; src: url(fonts/playfair-display-latin-wght-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-display: swap; font-weight: 600; src: url(fonts/poppins-latin-600-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-display: swap; font-weight: 800; src: url(fonts/poppins-latin-800-normal.woff2) format('woff2'); }
+@font-face { font-family: 'DM Serif Display'; font-style: normal; font-display: swap; font-weight: 400; src: url(fonts/dm-serif-display-latin-400-normal.woff2) format('woff2'); }
