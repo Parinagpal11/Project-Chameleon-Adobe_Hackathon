@@ -5,6 +5,7 @@ They get replaced/extended by designs the team builds in Adobe Express (target: 
 Photos are placeholders: a fill colour plus a `subject` box (image-relative 0..1).
 
 Run:  python tools/make_seed_testset.py
+      then python tools/make_photo_testset.py (it adds the 24 photo designs and rewrites index.json with all 36)
 """
 import json
 from pathlib import Path

@@ -27,9 +27,15 @@ const S = {
 const App = { painters: [], paint(what) { for (const p of this.painters) p(what); } };
 
 /* ───────── utils ───────── */
+/** A random id for this browser: on a shared server the home page lists only this browser's campaigns. */
+const OWNER = (() => {
+  let id = null; try { id = localStorage.getItem('chameleon.owner'); } catch { /* private mode */ }
+  if (!id || !/^[a-zA-Z0-9-]{8,64}$/.test(id)) { id = 'o-' + Math.random().toString(36).slice(2) + Date.now().toString(36); try { localStorage.setItem('chameleon.owner', id); } catch { /* private mode */ } }
+  return id;
+})();
 async function api(path, method = 'GET', data) {
   let r;
-  try { r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined }); }
+  try { r = await fetch(path, { method, headers: { 'Content-Type': 'application/json', 'X-Chameleon-Owner': OWNER }, body: data ? JSON.stringify(data) : undefined }); }
   catch { throw Error('Can’t reach the Chameleon server. Is `python run.py` still running?'); }
   let v = null; try { v = await r.json(); } catch { /* empty */ }
   if (!r.ok) throw Error((v && (typeof v.detail === 'string' ? v.detail : JSON.stringify(v.detail))) || `Request failed (${r.status})`);

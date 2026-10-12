@@ -101,7 +101,7 @@ Distortion and letterbox framing are properties of how a design is drawn, not of
 
 ## 4. Test set
 
-`examples/testset/` holds 12 seed designs in this format (simple / medium / hard: centred promo, photo split, full-bleed overlay, poster with speaker cards, sale banner, quote card, product grid, webinar, story, dense menu, asymmetric big type, app download). `tools/make_seed_testset.py` regenerates them.
+`examples/testset/` holds 36 designs in this format. 12 are hand-laid seeds with placeholder photos (simple / medium / hard: centred promo, photo split, full-bleed overlay, poster with speaker cards, sale banner, quote card, product grid, webinar, story, dense menu, asymmetric big type, app download); `tools/make_seed_testset.py` regenerates them. 24 use real photos and cover harder cases: sources that are themselves banners (728×90, 300×250, 160×600, 1584×396), group photos, two photos, a round photo, text only, long copy with legal, dark text on a light photo, tiny subjects; `tools/make_photo_testset.py` regenerates them and the index. The saved report (`examples/eval-report.json`, from `tools/make_eval_report.py`) is served while the test set and engine are unchanged.
 
 **To add a real design** (the goal is 36, built in Adobe Express):
 

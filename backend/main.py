@@ -1,5 +1,5 @@
 """Optional FastAPI adapter mirroring local_server.py (not integration-tested; the default server is)."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from models import ProjectSave
@@ -32,13 +32,13 @@ def example(name: str = 'snow_cabins'):
 @app.get('/templates')
 def templates(): return [{'id': k, **v} for k, v in service.TEMPLATES.items()]
 @app.get('/projects')
-def projects(): return service.list_projects()
+def projects(x_chameleon_owner: str = Header('')): return service.list_projects(x_chameleon_owner)
 @app.get('/project')
 def project(campaign: str): return run(service.get_project, campaign)
 @app.put('/project')
-def save(req: ProjectSave, campaign: str): return run(service.save_project, campaign, req)
+def save(req: ProjectSave, campaign: str, x_chameleon_owner: str = Header('')): return run(service.save_project, campaign, req, x_chameleon_owner)
 @app.delete('/project')
-def drop(campaign: str): return run(service.delete_project, campaign)
+def drop(campaign: str, x_chameleon_owner: str = Header('')): return run(service.delete_project, campaign, x_chameleon_owner)
 @app.post('/analyze')
 def analyze(data: dict): return run(service.analyze_request, data)
 @app.post('/adapt')

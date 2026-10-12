@@ -825,7 +825,7 @@ def subject_boxes(out: dict, a: dict) -> list:
     return res
 
 
-def _logos_off_subjects(out: dict, a: dict, W: float, H: float, reasons: list):
+def _logos_off_subjects(out: dict, a: dict, W: float, H: float, reasons: list, page_bg: str = '#ffffff'):
     """A logo never sits on a face or the product: move it to the photo's (or canvas's) clearest corner."""
     parts = subject_boxes(out, a)
     if not parts:
@@ -838,7 +838,7 @@ def _logos_off_subjects(out: dict, a: dict, W: float, H: float, reasons: list):
         if not mem:
             continue
         lb = Box.bound([Box.of(m['box']) for m in mem])
-        hits = [(pid, q) for pid, q in parts if lb.inter(q) > q.area * .03]
+        hits = [(pid, q) for pid, q in parts if lb.inter(q) > min(q.area * .03, lb.area * .05)]   # even a corner of the logo on the subject counts
         if not hits:
             continue
         fx, fy, fw, fh = out[hits[0][0]]['box']
@@ -847,18 +847,113 @@ def _logos_off_subjects(out: dict, a: dict, W: float, H: float, reasons: list):
         pad = max(6.0, min(W, H) * .03)
         others = [Box.of(m['box']) for m in out.values() if not m.get('hidden') and m['type'] in ('text', 'shape')
                   and 'box' in m and m['id'] not in gr['members'] and roles.get(m['id']) not in ('background', 'panel', 'decoration')]
-        for nx, ny in ((x0 + pad, y0 + pad), (x1 - pad - lb.w, y0 + pad), (x0 + pad, y1 - pad - lb.h), (x1 - pad - lb.w, y1 - pad - lb.h)):
+        photo = Box(x0, y0, x1 - x0, y1 - y0)
+        spots = [((x0 + pad, y0 + pad), True), ((x1 - pad - lb.w, y0 + pad), True), ((x0 + pad, y1 - pad - lb.h), True), ((x1 - pad - lb.w, y1 - pad - lb.h), True)]
+        # no clear corner on the photo: a corner of the page, off the photo, when a text logo can read there
+        texts = [m for m in mem if m['type'] == 'text']
+        ink = texts[0].get('style', {}).get('color') if texts and len(mem) == 1 else None
+        if ink:
+            # line up with the copy's left (or right) edge rather than the page edge
+            col = [Box.of(m['box']) for m in out.values() if not m.get('hidden') and 'box' in m and m['id'] not in gr['members']
+                   and roles.get(m['id']) in ('headline', 'subhead', 'body', 'cta', 'eyebrow') and not Box.of(m['box']).inter(photo)]
+            lx = min((c_.x for c_ in col), default=pad)
+            rx = max((c_.r for c_ in col), default=W - pad) - lb.w
+            spots += [((lx, pad), False), ((rx, pad), False), ((lx, H - pad - lb.h), False), ((rx, H - pad - lb.h), False),
+                      ((pad, pad), False), ((W - pad - lb.w, pad), False), ((pad, H - pad - lb.h), False), ((W - pad - lb.w, H - pad - lb.h), False)]
+        fills = [(Box.of(m['box']), m.get('style', {}).get('fill')) for m in out.values() if m['type'] == 'shape' and not m.get('hidden')
+                 and 'box' in m and m.get('style', {}).get('fill') and roles.get(m['id']) in ('background', 'panel')]
+        inks = [m.get('style', {}).get('color') for m in out.values() if m['type'] == 'text' and not m.get('hidden')
+                and roles.get(m['id']) in ('headline', 'subhead', 'body') and m.get('style', {}).get('color')]
+        for (nx, ny), on_photo in spots:
             cand = Box(nx, ny, lb.w, lb.h)
             if nx < 0 or ny < 0 or cand.r > W or cand.b > H:
                 continue
-            if any(cand.inter(q) > 0 for _, q in parts) or any(cand.inter(o) > 0 for o in others):
+            room = cand if on_photo else Box(cand.x - pad * .5, cand.y - pad * .5, cand.w + pad, cand.h + pad)   # breathing room off the photo
+            if any(cand.inter(q) > 0 for _, q in parts) or any(room.inter(o) > 0 for o in others):
                 continue
+            dark = None
+            if not on_photo:
+                if cand.inter(photo) > 0 or any(cand.inter(Box.of(m['box'])) > 0 for m in out.values()
+                                                if m['type'] == 'image' and not m.get('hidden') and 'box' in m):
+                    continue
+                under = next((f for b_, f in reversed(fills) if b_.inter(cand) >= cand.area * .99), page_bg)
+                if (contrast(ink, under) or 0) < 3:
+                    dark = max(inks, key=lambda c_: contrast(c_, under) or 0, default=None)
+                    if not dark or (contrast(dark, under) or 0) < 3:
+                        continue
             dx, dy = nx - lb.x, ny - lb.y
             for m in mem:
                 b = m['box']
                 m['box'] = [round(b[0] + dx, 2), round(b[1] + dy, 2), b[2], b[3]]
-            reasons.append('Logo moved to a clear corner so it stays off the photo subject.')
+                if not on_photo and dark and m['type'] == 'text':
+                    m.setdefault('style', {})['color'] = dark
+            if not on_photo:   # an earlier note said it stays on the photo; it doesn't any more
+                reasons[:] = [r for r in reasons if not r.startswith('Logo stays on the photo')]
+            reasons.append('Logo moved to a clear corner so it stays off the photo subject.' if on_photo
+                           else 'Logo moved off the photo to a clear corner of the page so it stays off the subject.')
             break
+
+
+def _rescue_logo(out: dict, a: dict, g, W: float, H: float, reasons: list):
+    """A logo the copy area had no room for goes on the photo instead, small, in a corner clear of the subject
+    and of everything else (the brand stays in every size). Ink colour is settled afterwards by the photo
+    legibility pass."""
+    roles = {k: v['role'] for k, v in a['roles'].items()}
+    photos = [Box.of(n['box']) for n in out.values() if n['type'] == 'image' and not n.get('hidden') and 'box' in n
+              and roles.get(n['id']) not in ('logo', 'decoration') and n['box'][2] * n['box'][3] >= W * H * .2]
+    if not photos:
+        return
+    parts = [q for _, q in subject_boxes(out, a)]
+    k = min(W / g.width, H / g.height)
+    for gr in a['groups']:
+        if gr['role'] != 'logo' or len(gr['members']) != 1:
+            continue
+        nid = gr['members'][0]
+        n, src = out.get(nid), g.by_id.get(nid)
+        if not n or not n.get('hidden') or src is None:
+            continue
+        if n['type'] == 'text':
+            style = dict(n.get('style') or {})
+            fs = max(MIN_TEXT * 1.05, float(style.get('fontSize') or 12) * k)
+            lw = text_width(n.get('text', ''), fs, style) + 2
+            lh = fs * float(style.get('lineHeight') or 1.15)
+        else:
+            lh = max(14.0, src.box.h * k)
+            lw = lh * src.box.w / max(1.0, src.box.h)
+        others = [Box.of(m['box']) for m in out.values() if not m.get('hidden') and 'box' in m and m['id'] != nid
+                  and m['type'] in ('text', 'shape') and roles.get(m['id']) not in ('background', 'panel', 'decoration')]
+        done = False
+        for ph in sorted(photos, key=lambda b_: -b_.area):
+            pad = max(4.0, min(ph.w, ph.h) * .05)
+            if lw + 2 * pad > ph.w * .6 or lh + 2 * pad > ph.h * .3:
+                continue
+            for x, y in ((ph.x + pad, ph.y + pad), (ph.r - pad - lw, ph.y + pad), (ph.x + pad, ph.b - pad - lh), (ph.r - pad - lw, ph.b - pad - lh)):
+                cand = Box(x, y, lw, lh)
+                room = Box(x - pad * .5, y - pad * .5, lw + pad, lh + pad)
+                if x < 0 or y < 0 or cand.r > W or cand.b > H or any(cand.inter(q) > 0 for q in parts) \
+                        or any(room.inter(o) > 0 for o in others):
+                    continue
+                n['box'] = [round(x, 2), round(y, 2), round(lw, 2), round(lh, 2)]
+                n['hidden'] = False
+                if n['type'] == 'text':
+                    n['style'] = {**(n.get('style') or {}), 'fontSize': round(fs, 2), 'align': 'left'}
+                kept = []
+                for r in reasons:
+                    if r.startswith('Logo dropped') or r.startswith('Logo joins the row'):
+                        continue
+                    if r.startswith('Dropped to make room:'):     # the logo is back: take it off that list
+                        names = [x.strip(' .') for x in r.split(':', 1)[1].split(',')]
+                        names = [x for x in names if x and x != 'logo']
+                        if not names:
+                            continue
+                        r = 'Dropped to make room: ' + ', '.join(names) + '.'
+                    kept.append(r)
+                reasons[:] = kept
+                reasons.append('Logo kept on a clear corner of the photo: the copy had no room for it at this size.')
+                done = True
+                break
+            if done:
+                break
 
 
 def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: list | None = None):
@@ -914,7 +1009,9 @@ def finish(design: dict, g, a: dict, out: dict, W: float, H: float, reasons: lis
             reasons.append(f"Photo cropped so {what} {'stay' if plural else 'stays'} fully in view.")
         elif src != 'assumed':
             reasons.append(f"Photo cropped around {what}; {c['kept'] * 100:.0f}% of {'them' if plural else 'it'} fits this shape.")
-    _logos_off_subjects(out, a, W, H, reasons)
+    _rescue_logo(out, a, g, W, H, reasons)
+    if not (abs(W - g.width) < .5 and abs(H - g.height) < .5):     # at the original size the designer placed it
+        _logos_off_subjects(out, a, W, H, reasons, (design.get('page') or {}).get('background') or '#ffffff')
     nodes = [out[n['id']] for n in design['nodes']]
     if not (abs(W - g.width) < .5 and abs(H - g.height) < .5 and a.get('_pinned_crop')):
         _legible_on_photos(nodes, a, W, H, reasons)       # (a photo the designer framed keeps their colours)
@@ -1288,7 +1385,7 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
             # size the photo column to its subject: narrower for a tall subject, wider for a wide one
             # (two people, a bowl and a lemon), keeping at least 40% of the width for the copy
             sub = a['subjects'].get(hero['members'][0])
-            copy_min = max(W * .32, min(W * .6, 150.0))         # the copy needs real width, even on small canvases
+            copy_min = max(W * (.28 if aspect >= 1.6 else .32), min(W * .6, 150.0))   # the copy needs real width, even on small canvases
             max_nw = max(W * .2, W - 3 * m - copy_min)
             if sub and sub.get('source') != 'assumed':
                 img_aspect = sub.get('aspect') or hb.w / max(1.0, hb.h)
@@ -1766,8 +1863,23 @@ def reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=N
     if row:
         flow_row(allitems, copy_region, k, gap * 1.5, out)
     elif frame_regions is not None:
-        for its, reg in columns():
+        cols = columns()
+        for its, reg in cols:
             flow_column(its, reg, k, gap, 'center', out)
+        # the message didn't need all the room above the photo: give the slack to the photo (more of the
+        # picture, less empty page), as long as the photo still spans the full width uncut
+        if not whole and len(cols) > 1:
+            above, reg = cols[0]
+            placed = [Box.of(out[n.id]['box']) for it in above for n in it.members if not out[n.id].get('hidden')]
+            pb = Box.of(out[bg_img['id']]['box'])
+            if placed:
+                used = Box.bound(placed)
+                grow = min(reg.h - used.h - 2 * m, W / max(.01, img_aspect) - pb.h)
+                if grow > m:
+                    pb = Box(pb.x, pb.y - grow, pb.w, pb.h + grow)
+                    _set(out, bg_img['id'], pb.list())
+                    overlay_panel = pb
+                    flow_column(above, Box(reg.x, reg.y, reg.w, reg.h - grow), k, gap, 'center', out)
     else:
         for its, reg in columns():
             flow_column(its, reg, k, gap, valign, out)

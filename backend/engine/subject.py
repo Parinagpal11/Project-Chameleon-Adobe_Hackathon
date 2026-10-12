@@ -383,6 +383,7 @@ def find_subject(node) -> dict:
 
 
 MODEL_PATH = __import__('pathlib').Path(__file__).resolve().parent / 'models' / 'u2netp.onnx'
+_MODEL_LOCK = __import__('threading').Lock()
 
 
 def _u2net():
@@ -392,6 +393,7 @@ def _u2net():
             import onnxruntime as ort
             opts = ort.SessionOptions()
             opts.log_severity_level = 3
+            opts.enable_cpu_mem_arena = False   # don't keep a ~200 MB scratch pool after each run (small hosts have 512 MB)
             _models['u2net'] = ort.InferenceSession(str(MODEL_PATH), opts, providers=['CPUExecutionProvider'])
         except Exception:
             _models['u2net'] = None
@@ -414,7 +416,8 @@ def object_map(img):
     def run(tile):
         x = np.asarray(tile.resize((320, 320), Image.BILINEAR), dtype=np.float32) / 255.0
         x = ((x - mean) / std).transpose(2, 0, 1)[None].astype(np.float32)
-        out = sess.run(None, {name: x})[0][0, 0]
+        with _MODEL_LOCK:   # one run at a time: two at once could pass a small host's memory limit
+            out = sess.run(None, {name: x})[0][0, 0]
         return np.asarray(Image.fromarray(out.astype(np.float32)).resize(tile.size, Image.BILINEAR))
 
     W, H = img.size
@@ -498,6 +501,66 @@ def objects_from_map(m):
     return [x0, y0, x1 - x0, y1 - y0], parts, conf
 
 
+YOLOX_PATH = MODEL_PATH.parent / 'yolox_nano.onnx'
+
+
+def _yolox():
+    """YOLOX-Nano (Apache-2.0, COCO), loaded once; used only for its 'person' class. None if unavailable."""
+    if 'yolox' not in _models:
+        try:
+            import onnxruntime as ort
+            opts = ort.SessionOptions()
+            opts.log_severity_level = 3
+            opts.enable_cpu_mem_arena = False
+            _models['yolox'] = ort.InferenceSession(str(YOLOX_PATH), opts, providers=['CPUExecutionProvider'])
+        except Exception:
+            _models['yolox'] = None
+    return _models['yolox']
+
+
+def _persons(img, conf: float = .4) -> list:
+    """People found by YOLOX-Nano: [(score, [x, y, w, h])] image-relative. A learned detector finds people
+    sitting, side-on, small or half in shadow, which the HOG and face detectors miss."""
+    sess = _yolox()
+    if sess is None:
+        return []
+    try:
+        import numpy as np
+        import cv2
+    except ImportError:
+        return []
+    a = np.asarray(img)[:, :, ::-1]                      # the model was trained on BGR, unnormalised pixels
+    h, w = a.shape[:2]
+    S = 416
+    r = min(S / h, S / w)
+    pad = np.full((S, S, 3), 114, np.uint8)
+    pad[:int(h * r), :int(w * r)] = cv2.resize(a, (int(w * r), int(h * r)), interpolation=cv2.INTER_LINEAR)
+    with _MODEL_LOCK:
+        out = sess.run(None, {sess.get_inputs()[0].name: pad.transpose(2, 0, 1)[None].astype(np.float32)})[0][0]
+    grids, strides = [], []
+    for st in (8, 16, 32):
+        n = S // st
+        xv, yv = np.meshgrid(np.arange(n), np.arange(n))
+        grids.append(np.stack((xv, yv), 2).reshape(-1, 2))
+        strides.append(np.full((n * n, 1), st))
+    grids, strides = np.concatenate(grids), np.concatenate(strides)
+    xy = (out[:, :2] + grids) * strides
+    wh = np.exp(np.clip(out[:, 2:4], -10, 10)) * strides
+    score = out[:, 4] * out[:, 5]                         # objectness x 'person'
+    keep = score >= conf
+    if not keep.any():
+        return []
+    boxes = np.concatenate([xy[keep] - wh[keep] / 2, wh[keep]], 1) / r
+    sc = score[keep]
+    idx = np.array(cv2.dnn.NMSBoxes(boxes.tolist(), sc.tolist(), conf, .45)).flatten()
+    res = []
+    for i in idx:
+        x0, y0, bw, bh = boxes[i]
+        x0, y0 = max(0.0, x0 / w), max(0.0, y0 / h)
+        res.append((float(sc[i]), [float(x0), float(y0), float(min(1 - x0, bw / w)), float(min(1 - y0, bh / h))]))
+    return res
+
+
 def _accept_people(people, m):
     """Drop person boxes cut off by the photo edge (not a full body) or sitting on a known object
     that isn't person-shaped (the HOG detector fired on a dog's legs)."""
@@ -510,6 +573,14 @@ def _accept_people(people, m):
     return out
 
 
+def _people_result(people, aspect, conf):
+    x0 = min(p[0] for p in people); y0 = min(p[1] for p in people)
+    x1 = max(p[0] + p[2] for p in people); y1 = max(p[1] + p[3] for p in people)
+    people = sorted(people, key=lambda p: p[0])     # numbered left to right
+    return {'box': [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)], 'source': 'people',
+            'confidence': conf, 'aspect': aspect, 'parts': [[round(v, 4) for v in p] for p in people]}
+
+
 def _detect(src: str) -> dict:
     img = _open(src)
     if img is None:
@@ -517,8 +588,13 @@ def _detect(src: str) -> dict:
     aspect = round(img.size[0] / img.size[1], 4)
     omap = object_map(img)            # also used to confirm faces
     face = _faces(img, omap)
+    persons = _persons(img) if omap is not None else []
     if face:
         box, parts = face
+        crowd = [b for s_, b in persons if s_ >= .55 and b[3] >= .12]
+        # a group photo where only some faces were found: keep everyone (one sharp face among passers-by stays the subject)
+        if len(parts) >= 2 and len(crowd) >= 4 and len(crowd) >= 2 * len(parts):
+            return _people_result(crowd, aspect, .85)
         return {'box': [round(v, 4) for v in box], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect,
                 'parts': [[round(v, 4) for v in p] for p in parts]}
     # 2. the salient-object model (the standard approach in modern cut-out / smart-crop tools)
@@ -531,6 +607,12 @@ def _detect(src: str) -> dict:
                 out['parts'] = [[round(v, 4) for v in p] for p in parts]
             return out
         # 3. nothing stands out as an object: maybe a small person in a big scene
+        clear = [b for s_, b in persons if s_ >= .5]
+        sizes = sorted((b[2] * b[3] for s_, b in persons), reverse=True)
+        if len(sizes) >= 3 and sizes[0] < 2 * sizes[1]:
+            clear = []       # a crowd with no one person standing out: no single subject to crop around
+        if clear:
+            return _people_result(clear, aspect, .75)
         people = _accept_people(_people(img), omap)
         if people:
             x0 = min(p[0] for p in people); y0 = min(p[1] for p in people)

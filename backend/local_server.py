@@ -10,6 +10,13 @@ import service
 MAX_BODY = 15_000_000
 
 
+def _plain(o):
+    """numpy numbers (from the image code) as plain JSON numbers."""
+    if hasattr(o, 'item'):
+        return o.item()
+    raise TypeError(f'{type(o).__name__} is not JSON serializable')
+
+
 def _error_text(exc):
     if isinstance(exc, ValidationError):
         first = exc.errors()[0]
@@ -26,7 +33,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def send(self, status, body, kind='application/json', cache='no-store'):
         if not isinstance(body, bytes):
-            body = json.dumps(body, separators=(',', ':')).encode()
+            body = json.dumps(body, separators=(',', ':'), default=_plain).encode()
         if len(body) > 1400 and 'gzip' in self.headers.get('Accept-Encoding', '') and not kind.startswith(('font/', 'image/')):
             body = gzip.compress(body, 5)
             self.send_response(status)
@@ -50,12 +57,13 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self):
         path = urlparse(self.path)
         q = parse_qs(path.query)
-        campaign = q.get('campaign', ['coffee-launch'])[0]
+        campaign = q.get('campaign', [''])[0]
+        owner = self.headers.get('X-Chameleon-Owner', '')
         p, m = path.path, self.command
         try:
             if m == 'GET':
                 if p == '/health': return self.send(200, {'status': 'ok'})
-                if p == '/projects': return self.send(200, service.list_projects())
+                if p == '/projects': return self.send(200, service.list_projects(owner))
                 if p == '/project': return self.send(200, service.get_project(campaign))
                 if p == '/testset': return self.send(200, {'designs': service.testset_index(), 'sizes': EVAL_SIZES})
                 if p.startswith('/testset/'): return self.send(200, service.testset_design(p[9:]))
@@ -80,9 +88,9 @@ class Handler(BaseHTTPRequestHandler):
                 # fonts never change; pages, scripts and templates are re-checked so an update shows at once
                 return self.send(200, file.read_bytes(), kind, 'public, max-age=31536000, immutable' if file.suffix == '.woff2' else 'no-cache')
             if m == 'DELETE':
-                if p == '/project': return self.send(200, service.delete_project(campaign))
+                if p == '/project': return self.send(200, service.delete_project(campaign, owner))
             if m == 'PUT' and p == '/project':
-                return self.send(200, service.save_project(campaign, ProjectSave.model_validate(self.body())))
+                return self.send(200, service.save_project(campaign, ProjectSave.model_validate(self.body()), owner))
             if m == 'POST':
                 data = self.body()
                 if p == '/analyze':

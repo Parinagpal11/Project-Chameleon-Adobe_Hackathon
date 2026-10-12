@@ -22,6 +22,21 @@ Open http://127.0.0.1:8000 and stop with Control+C.
 - To host it, run `python run.py --host 0.0.0.0` (the `PORT` environment variable is respected).
 - No Node, API key, build step or internet connection is needed. Fonts are served with the app.
 
+### Host it on Render
+
+`render.yaml` describes the service, so Render can set it up from the GitHub repo:
+
+1. Sign in at https://dashboard.render.com, choose **New → Blueprint**, and pick this repository.
+2. Render reads `render.yaml` and creates the `chameleon` web service. Click **Apply** and wait for the first build (a few minutes).
+3. Open the `onrender.com` link it gives you.
+
+Good to know about the free plan:
+
+- It sleeps after 15 minutes without visits, and the next visit takes about a minute to wake it. Open the link a few minutes before a demo.
+- It has a small CPU. Each new photo takes several seconds to analyse there; the templates, the home page and the report are ready at once.
+- Saved campaigns are lost when it restarts. Each visitor sees only their own campaigns.
+- For judging, the paid Starter plan (5x the CPU, never sleeps) is faster. Change `plan: free` in `render.yaml`, or change the plan in Render's dashboard.
+
 ## Try it in a minute
 
 1. On the home page, click **Try on a sample**. One design appears laid out for six sizes on one canvas.
@@ -47,13 +62,13 @@ More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/S
 
 | Path | What's there |
 |---|---|
-| `backend/engine/` | The layout engine (above). `models/u2netp.onnx` is the photo-subject model; `fonts.json` holds glyph widths for measuring text. |
+| `backend/engine/` | The layout engine (above). `models/` holds the photo models (U²-Net-P for the main subject, YOLOX-Nano for people); `fonts.json` holds glyph widths for measuring text. |
 | `backend/service.py` | Request handling, project storage (SQLite), templates, result cache, start-up warm-up |
 | `backend/local_server.py` | The default HTTP server. `backend/main.py` is an optional FastAPI version of it. |
 | `frontend/` | The Studio, home, How it works, Engine room and report pages: plain JS and Canvas, no build step |
 | `examples/templates/` | Starter designs with real photos |
-| `examples/testset/` | The tiered test set used by the Engine room and the report |
-| `tools/` | Scripts that regenerate `fonts.json` and the seed test set |
+| `examples/testset/` | The test set used by the Engine room, the report and the tests: 36 designs (12 hand-laid seeds and 24 with real photos), from 160×600 to 1080×1920 |
+| `tools/` | Scripts that regenerate `fonts.json`, the test set (`make_seed_testset.py`, `make_photo_testset.py`) and the saved report (`make_eval_report.py`) |
 | `tests/` | Engine, HTTP and browser (Playwright) tests |
 | `docs/`, `design-system/` | Engine notes, strategy, plan; UI tokens and rules |
 
@@ -73,6 +88,7 @@ More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/S
 - **Models load at start-up.** The photo models load in the background when the server starts, so the first visitor doesn't wait for them.
 - **The background ribbon doesn't slow the page.** It is drawn in a background worker at 30 frames a second and stops when you scroll past it.
 - **The home page loads in order.** The hero shows the design first. The sections below load as you scroll toward them.
+- **The report is saved.** `examples/eval-report.json` holds the scores for the whole test set. The server uses it while the test set and engine are unchanged, so `/report` opens at once even on a small host. Run `python tools/make_eval_report.py` after changing either.
 
 ## Tests
 
@@ -85,4 +101,6 @@ The browser tests (`test_ui_e2e.py`, `test_xray_e2e.py`) drive the real pages in
 ## Limits
 
 - Input is Chameleon JSON, the templates, or your own photo and logo. There is no Figma or PSD import yet.
-- It is single-user and local, with no accounts or sharing.
+- There are no accounts or sharing. On a shared server each browser sees only its own campaigns.
+- Some subjects are hard to find: a face filling the whole frame, a small landmark far away, people sitting at the very edges of a photo.
+- A small banner can't always show a wide subject whole, such as a row of eight people in a 300×250 ad. Those sizes are scored for what they lose.

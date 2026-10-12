@@ -31,6 +31,8 @@ def database():
     conn = sqlite3.connect(path, timeout=10)
     try:
         conn.executescript(SCHEMA)
+        if 'owner' not in {r[1] for r in conn.execute('PRAGMA table_info(projects)')}:
+            conn.execute("ALTER TABLE projects ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
         with conn:
             yield conn
     finally:
@@ -38,10 +40,18 @@ def database():
 
 
 # ------------------------------------------------------------------ projects
+# On a shared (hosted) server every browser sends its own random owner id, so each visitor's home page lists
+# only their own campaigns. A campaign link still opens for anyone who has it. Campaigns saved before owners
+# existed (owner '') show for everyone, which keeps a local install's older campaigns visible.
 
-def list_projects():
+def owner_key(value):
+    value = value or ''
+    return value if re.fullmatch(r'[a-zA-Z0-9-]{8,64}', value) else ''
+
+
+def list_projects(owner=''):
     with database() as conn:
-        rows = conn.execute('SELECT campaign,name,updated FROM projects ORDER BY updated DESC').fetchall()
+        rows = conn.execute("SELECT campaign,name,updated FROM projects WHERE owner IN (?, '') ORDER BY updated DESC", (owner_key(owner),)).fetchall()
     return [{'campaign': c, 'name': n, 'updated': u} for c, n, u in rows]
 
 
@@ -67,19 +77,24 @@ def _valid_design(design):
     return Design.model_validate(design).model_dump()
 
 
-def save_project(campaign, req):
+def save_project(campaign, req, owner=''):
     campaign_key(campaign)
     data = {'design': _valid_design(req.design), 'formats': [f.model_dump() for f in req.formats],
             'assets': req.assets, 'state': req.state}
     with database() as conn:
-        conn.execute('INSERT OR REPLACE INTO projects VALUES (?,?,?,?)', (campaign, req.name or campaign, json.dumps(data), time.time()))
+        row = conn.execute('SELECT owner FROM projects WHERE campaign=?', (campaign,)).fetchone()
+        keep = row[0] if row else owner_key(owner)       # a campaign keeps the owner that created it
+        conn.execute('INSERT OR REPLACE INTO projects (campaign,name,data,updated,owner) VALUES (?,?,?,?,?)',
+                     (campaign, req.name or campaign, json.dumps(data), time.time(), keep))
     return {'status': 'saved', 'campaign': campaign}
 
 
-def delete_project(campaign):
+def delete_project(campaign, owner=''):
     campaign_key(campaign)
     with database() as conn:
-        conn.execute('DELETE FROM projects WHERE campaign=?', (campaign,))
+        n = conn.execute("DELETE FROM projects WHERE campaign=? AND owner IN (?, '')", (campaign, owner_key(owner))).rowcount
+    if not n:
+        raise LookupError('Project not found.')
     return {'status': 'deleted', 'campaign': campaign}
 
 
@@ -104,6 +119,19 @@ def testset_design(design_id):
 
 
 _EVAL_CACHE = {}
+EVAL_FILE = ROOT / 'examples' / 'eval-report.json'
+
+
+def _eval_stamp():
+    """A fingerprint of everything the report depends on: the test-set files and the engine's code and models."""
+    h = hashlib.sha1()
+    engine = ROOT / 'backend' / 'engine'
+    for f in sorted(list(TESTSET.glob('*.json')) + list(engine.glob('*.py')) + list(engine.glob('*.json'))):
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
 METHODS = ('chameleon', 'stretch', 'crop', 'letterbox')
 DIMS = ('overall', 'content', 'legibility', 'faithfulness', 'composition', 'subject')
 
@@ -114,10 +142,16 @@ def eval_report():
     Cached until a test-set file or the engine changes."""
     from engine.adapt import adapt
     from engine.plan import EVAL_SIZES
-    engine = ROOT / 'backend' / 'engine'
-    stamp = tuple(sorted((f.name, f.stat().st_mtime) for f in list(TESTSET.glob('*.json')) + list(engine.glob('*.py'))))
+    stamp = _eval_stamp()
     if _EVAL_CACHE.get('stamp') == stamp:
         return _EVAL_CACHE['report']
+    try:       # saved by tools/make_eval_report.py: a fresh server (or a slow host) answers at once
+        saved = json.loads(EVAL_FILE.read_text())
+        if saved.get('stamp') == stamp:
+            _EVAL_CACHE.update(stamp=stamp, report=saved['report'])
+            return saved['report']
+    except (OSError, ValueError):
+        pass
     designs, rows = [], []
     for meta in testset_index():
         d = testset_design(meta['id'])
@@ -145,8 +179,9 @@ def eval_report():
         ties += abs(c - best) <= .05
         losses += c < best - .05
     report = {'cases': len(rows), 'sizes': EVAL_SIZES, 'summary': summary,
-              'wins': wins, 'ties': ties, 'losses': losses,
-              'checks_ok': sum(r['checks_ok'] for r in rows), 'designs': designs}
+              'wins': int(wins), 'ties': int(ties), 'losses': int(losses),
+              'checks_ok': int(sum(bool(r['checks_ok']) for r in rows)), 'designs': designs}
+    report = json.loads(json.dumps(report, default=lambda o: o.item() if hasattr(o, 'item') else str(o)))   # plain numbers
     _EVAL_CACHE.update(stamp=stamp, report=report)
     return report
 

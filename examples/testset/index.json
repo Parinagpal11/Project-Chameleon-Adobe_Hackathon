@@ -142,5 +142,303 @@
       "device",
       "badges"
     ]
+  },
+  {
+    "id": "fitness-story",
+    "name": "Running club, full-bleed story",
+    "width": 1080,
+    "height": 1920,
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "photo",
+      "story",
+      "tiny-subject"
+    ]
+  },
+  {
+    "id": "outdoor-split",
+    "name": "Outdoor gear, photo right",
+    "width": 1200,
+    "height": 628,
+    "level": "simple",
+    "tags": [
+      "split",
+      "photo",
+      "person"
+    ]
+  },
+  {
+    "id": "meal-card",
+    "name": "Meal kit, card over flat-lay",
+    "width": 1080,
+    "height": 1080,
+    "level": "medium",
+    "tags": [
+      "card",
+      "photo",
+      "flat-lay",
+      "centred"
+    ]
+  },
+  {
+    "id": "sneaker-drop",
+    "name": "Sneaker drop, product on white",
+    "width": 1080,
+    "height": 1350,
+    "level": "simple",
+    "tags": [
+      "product",
+      "photo",
+      "price"
+    ]
+  },
+  {
+    "id": "street-style",
+    "name": "Street style, copy right",
+    "width": 1080,
+    "height": 1350,
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "photo",
+      "face",
+      "panel"
+    ]
+  },
+  {
+    "id": "cafe-friends",
+    "name": "Café, two friends, landscape",
+    "width": 1600,
+    "height": 900,
+    "level": "medium",
+    "tags": [
+      "split",
+      "photo",
+      "faces",
+      "two-people"
+    ]
+  },
+  {
+    "id": "concert-banner",
+    "name": "Concert tickets, wide banner",
+    "width": 1584,
+    "height": 396,
+    "level": "hard",
+    "tags": [
+      "banner-source",
+      "overlay",
+      "crowd"
+    ]
+  },
+  {
+    "id": "earbuds-leaderboard",
+    "name": "Earbuds, leaderboard source",
+    "width": 728,
+    "height": 90,
+    "level": "hard",
+    "tags": [
+      "banner-source",
+      "small-source",
+      "product"
+    ]
+  },
+  {
+    "id": "dog-mrec",
+    "name": "Dog food, medium rectangle source",
+    "width": 300,
+    "height": 250,
+    "level": "medium",
+    "tags": [
+      "banner-source",
+      "small-source",
+      "animal"
+    ]
+  },
+  {
+    "id": "paris-skyscraper",
+    "name": "Paris trip, skyscraper source",
+    "width": 160,
+    "height": 600,
+    "level": "hard",
+    "tags": [
+      "banner-source",
+      "tall-source",
+      "landmark"
+    ]
+  },
+  {
+    "id": "team-group",
+    "name": "Team photo, two buttons",
+    "width": 1080,
+    "height": 1080,
+    "level": "medium",
+    "tags": [
+      "stacked",
+      "photo",
+      "group",
+      "two-buttons"
+    ]
+  },
+  {
+    "id": "tokyo-night",
+    "name": "Tokyo after dark, story",
+    "width": 1080,
+    "height": 1920,
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "photo",
+      "text-in-photo",
+      "night"
+    ]
+  },
+  {
+    "id": "skincare-portrait",
+    "name": "Skincare, face right",
+    "width": 1080,
+    "height": 1350,
+    "level": "medium",
+    "tags": [
+      "split",
+      "photo",
+      "face"
+    ]
+  },
+  {
+    "id": "pet-new",
+    "name": "Pet treats, new badge",
+    "width": 1200,
+    "height": 628,
+    "level": "simple",
+    "tags": [
+      "split",
+      "photo",
+      "animal",
+      "badge"
+    ]
+  },
+  {
+    "id": "two-photo-stay",
+    "name": "Holiday stay, two photos",
+    "width": 1080,
+    "height": 1080,
+    "level": "hard",
+    "tags": [
+      "two-photos",
+      "centred",
+      "cards"
+    ]
+  },
+  {
+    "id": "coast-panorama",
+    "name": "Coast trip, panorama band",
+    "width": 1600,
+    "height": 900,
+    "level": "medium",
+    "tags": [
+      "stacked",
+      "panorama",
+      "tiny-subject"
+    ]
+  },
+  {
+    "id": "latte-square",
+    "name": "Iced latte, copy left",
+    "width": 1080,
+    "height": 1080,
+    "level": "simple",
+    "tags": [
+      "overlay",
+      "photo",
+      "light-photo"
+    ]
+  },
+  {
+    "id": "text-only-launch",
+    "name": "Product launch, text only",
+    "width": 1200,
+    "height": 628,
+    "level": "simple",
+    "tags": [
+      "text-only",
+      "decoration",
+      "dark"
+    ]
+  },
+  {
+    "id": "serum-long-copy",
+    "name": "Serum, long copy and legal",
+    "width": 1080,
+    "height": 1350,
+    "level": "hard",
+    "tags": [
+      "long-copy",
+      "legal",
+      "product",
+      "list"
+    ]
+  },
+  {
+    "id": "snow-charity",
+    "name": "Winter charity, dark text on light photo",
+    "width": 1080,
+    "height": 1080,
+    "level": "medium",
+    "tags": [
+      "overlay",
+      "light-photo",
+      "centred",
+      "small-subjects"
+    ]
+  },
+  {
+    "id": "podcast-circle",
+    "name": "Podcast episode, round photo",
+    "width": 1080,
+    "height": 1080,
+    "level": "medium",
+    "tags": [
+      "round-photo",
+      "centred",
+      "face"
+    ]
+  },
+  {
+    "id": "sandal-countdown",
+    "name": "Sandal sale, big number story",
+    "width": 1080,
+    "height": 1920,
+    "level": "medium",
+    "tags": [
+      "big-number",
+      "product",
+      "story"
+    ]
+  },
+  {
+    "id": "retreat-fog",
+    "name": "Wellness retreat, centred story",
+    "width": 1080,
+    "height": 1920,
+    "level": "hard",
+    "tags": [
+      "overlay",
+      "light-photo",
+      "centred",
+      "fog"
+    ]
+  },
+  {
+    "id": "careers-banner",
+    "name": "Careers, wide banner with friends",
+    "width": 1584,
+    "height": 396,
+    "level": "medium",
+    "tags": [
+      "banner-source",
+      "split",
+      "faces"
+    ]
   }
 ]

@@ -335,14 +335,15 @@ def score(design: dict, original: dict, a: dict, distortion: float = 1.0, subjec
 
 
 def _subject_under_copy(out: dict, a: dict) -> float:
-    """Share of the photo subjects' area that has text or a button drawn over it."""
+    """Share of the photo subjects' area that has text, a button or the logo drawn over it."""
     from .adapt import subject_boxes
     roles = {k: v['role'] for k, v in a['roles'].items()}
     parts = subject_boxes(out, a)
     if not parts:
         return 0.0
-    copy_ = [Box.of(n['box']) for n in out.values() if not n.get('hidden') and 'box' in n and n['type'] in ('text', 'shape')
-             and roles.get(n['id']) not in ('background', 'panel', 'decoration', 'logo')]
+    copy_ = [Box.of(n['box']) for n in out.values() if not n.get('hidden') and 'box' in n
+             and (n['type'] in ('text', 'shape') or (n['type'] == 'image' and roles.get(n['id']) == 'logo'))
+             and roles.get(n['id']) not in ('background', 'panel', 'decoration')]
     tot = sum(q.area for _, q in parts) or 1.0
     cov = 0.0
     for _, q in parts:

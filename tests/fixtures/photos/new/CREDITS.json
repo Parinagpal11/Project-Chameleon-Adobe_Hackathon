@@ -1,0 +1,162 @@
+[
+  {
+    "file": "crowd-concert.jpg",
+    "category": "crowd of many people",
+    "source_url": "https://www.pexels.com/photo/purple-fireworks-effect-1190298/",
+    "photographer": "Wendy Wei",
+    "licence": "Pexels License",
+    "why_hard": "Hundreds of raised hands and silhouetted heads with no single dominant face, so 'the subject' is the whole crowd plus the fireworks above."
+  },
+  {
+    "file": "tiny-hiker-mountain.jpg",
+    "category": "tiny subject in a huge landscape",
+    "source_url": "https://www.pexels.com/photo/person-standing-on-mountain-top-9715781/",
+    "photographer": "Igor Cibulsky",
+    "licence": "Pexels License",
+    "why_hard": "The person is a few pixels tall on a rocky summit at the bottom of a vast mountain scene and is easy to crop away."
+  },
+  {
+    "file": "edge-face-right.jpg",
+    "category": "subject at the extreme edge of the frame",
+    "source_url": "https://www.pexels.com/photo/photo-of-a-woman-looking-in-space-3574684/",
+    "photographer": "Brett Sayles",
+    "licence": "Pexels License",
+    "why_hard": "The face sits against the right border and is cut by it, with empty bokeh filling the left two-thirds."
+  },
+  {
+    "file": "edge-clock-corner.jpg",
+    "category": "subject at the extreme edge of the frame",
+    "source_url": "https://www.pexels.com/photo/negative-space-28106864/",
+    "photographer": "H",
+    "licence": "Pexels License",
+    "why_hard": "A small clock in the bottom-right corner of a flat orange field: the only object, far from the centre."
+  },
+  {
+    "file": "busy-bazaar.jpg",
+    "category": "busy/cluttered background",
+    "source_url": "https://www.pexels.com/photo/bazaar-in-jerusalem-16013167/",
+    "photographer": "brokenadmiral_",
+    "licence": "Pexels License",
+    "why_hard": "A vaulted market packed with stalls, goods and many small shoppers, with no clear focal point."
+  },
+  {
+    "file": "signage-japanese-shopfront.jpg",
+    "category": "text/signage inside the photo",
+    "source_url": "https://www.pexels.com/photo/advertisement-on-building-wall-at-night-17873961/",
+    "photographer": "Tien Nguyen",
+    "licence": "Pexels License",
+    "why_hard": "Large Japanese characters and many small signs dominate the frame, and cropping through text looks broken."
+  },
+  {
+    "file": "panorama-mountains.jpg",
+    "category": "very wide panorama (>=3:1)",
+    "source_url": "https://www.pexels.com/photo/panorama-photo-of-mountains-140117/",
+    "photographer": "Ulf Schade",
+    "licence": "Pexels License",
+    "why_hard": "About 4.5:1 panorama: cropping to 9:16 or square keeps only a thin slice, and there is no obvious subject."
+  },
+  {
+    "file": "tall-eiffel-aerial.jpg",
+    "category": "very tall photo (<=1:2)",
+    "source_url": "https://www.pexels.com/photo/aerial-view-of-eiffel-tower-in-paris-france-8430383/",
+    "photographer": "Mikhail Nilov",
+    "licence": "Pexels License",
+    "why_hard": "About 1:2.15 vertical shot with the tower in the upper middle, which is hard to fit into 728x90 or 1584x396."
+  },
+  {
+    "file": "tall-walkway-feet.jpg",
+    "category": "very tall photo (<=1:2)",
+    "source_url": "https://www.pexels.com/photo/anonymous-person-standing-on-narrow-walkway-in-countryside-5499540/",
+    "photographer": "Diana",
+    "licence": "Pexels License",
+    "why_hard": "Extreme vertical panorama (about 1:4.4); the only human cue is a pair of feet at the very bottom edge."
+  },
+  {
+    "file": "night-concert-dark.jpg",
+    "category": "dark/night/low light",
+    "source_url": "https://www.pexels.com/photo/crowd-watching-show-inside-the-dark-stadium-761543/",
+    "photographer": "Jack Gittoes",
+    "licence": "Pexels License",
+    "why_hard": "Mostly near-black frame: a crowd in silhouette and a bright stage glare, so saliency is pulled to the lights."
+  },
+  {
+    "file": "night-snow-walker.jpg",
+    "category": "dark/night/low light",
+    "source_url": "https://www.pexels.com/photo/black-and-white-photography-of-a-person-walking-on-snow-covered-ground-11591602/",
+    "photographer": "Georgy Druzhinin",
+    "licence": "Pexels License",
+    "why_hard": "A small dark walker at night in black and white, beside bright street lamps that compete for attention."
+  },
+  {
+    "file": "snow-hikers-white.jpg",
+    "category": "low contrast / fog / snow white-on-white",
+    "source_url": "https://www.pexels.com/photo/men-walking-on-snow-covered-field-6862325/",
+    "photographer": "Justus Menke",
+    "licence": "Pexels License",
+    "why_hard": "Two small hikers in a white-out where snow and sky merge with no horizon, so edges and contrast are minimal."
+  },
+  {
+    "file": "fog-rock.jpg",
+    "category": "low contrast / fog / snow white-on-white",
+    "source_url": "https://www.pexels.com/photo/brown-rock-on-cliff-2418673/",
+    "photographer": "Gül Işık",
+    "licence": "Pexels License",
+    "why_hard": "A balanced rock fading into thick white fog, with no face or person and soft low-contrast edges."
+  },
+  {
+    "file": "face-closeup.jpg",
+    "category": "close-up face filling the frame",
+    "source_url": "https://www.pexels.com/photo/woman-face-in-close-up-15134382/",
+    "photographer": "Jonathan Borba",
+    "licence": "Pexels License",
+    "why_hard": "An extreme close-up where the face is cut at every edge, so a face box would be bigger than most crops."
+  },
+  {
+    "file": "two-people-apart-bench.jpg",
+    "category": "two subjects far apart (left and right edges)",
+    "source_url": "https://www.pexels.com/photo/two-people-sitting-on-a-bench-in-the-city-15121478/",
+    "photographer": "Valentin Angel Fernandez",
+    "licence": "Pexels License",
+    "why_hard": "Two people sit at the far left and far right of a round planter, so a centre crop shows neither."
+  },
+  {
+    "file": "product-sneakers-white.jpg",
+    "category": "product on plain white background",
+    "source_url": "https://www.pexels.com/photo/photo-of-sneakers-on-white-background-2529148/",
+    "photographer": "Melvin Buezo",
+    "licence": "Pexels License",
+    "why_hard": "Floating sneakers on pure white with a soft shadow: the background must be extended cleanly, and the shoes must not be cut."
+  },
+  {
+    "file": "animal-pug.jpg",
+    "category": "animal",
+    "source_url": "https://www.pexels.com/photo/portrait-of-black-pug-dog-20747165/",
+    "photographer": "Kelly Cormier",
+    "licence": "Pexels License",
+    "why_hard": "A black dog face (a non-human face detector misses it) placed right of centre on a blurred background."
+  },
+  {
+    "file": "group-row.jpg",
+    "category": "group photo in a row",
+    "source_url": "https://www.pexels.com/photo/group-of-people-standing-together-10423475/",
+    "photographer": "HONG SON",
+    "licence": "Pexels License",
+    "why_hard": "Eight people in a horizontal line: a 9:16 crop must drop people, and a leaderboard must keep all the faces."
+  },
+  {
+    "file": "mirror-reflection.jpg",
+    "category": "reflection or mirror",
+    "source_url": "https://www.pexels.com/photo/woman-face-reflection-in-mirror-18067491/",
+    "photographer": "Seher Doğan",
+    "licence": "Pexels License",
+    "why_hard": "The only visible face is a reflection in a hand mirror, while the real person is a dark blur on the right."
+  },
+  {
+    "file": "flatlay-meal-prep.jpg",
+    "category": "flat-lay overhead with many objects",
+    "source_url": "https://www.pexels.com/photo/top-view-of-dishes-on-table-4929677/",
+    "photographer": "Justin Doherty",
+    "licence": "Pexels License",
+    "why_hard": "An overhead grid of many bowls and trays of equal weight, with no single subject and objects touching every edge."
+  }
+]

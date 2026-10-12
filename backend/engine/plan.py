@@ -38,7 +38,9 @@ def plan_tier(src_w: float, src_h: float, dst_w: float, dst_h: float) -> dict:
     o_src, o_dst = orientation(src_w, src_h), orientation(dst_w, dst_h)
     flips = o_src != o_dst and 'square' not in (o_src, o_dst)
     short = min(dst_w, dst_h)
-    if change > 4 or short <= 160:
+    if abs(src_w - dst_w) < .5 and abs(src_h - dst_h) < .5:
+        tier = 1     # the size it was designed at (even a banner): nothing to adapt
+    elif change > 4 or short <= 160:
         tier = 3
     elif flips or change > 1.5:
         tier = 2

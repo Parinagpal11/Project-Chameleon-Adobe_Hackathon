@@ -1,0 +1,16 @@
+# Render blueprint: one web service, built from requirements.txt and started by run.py.
+# Free plan: 0.1 CPU and 512 MB; it sleeps after 15 minutes without visits (about a minute to wake),
+# and saved campaigns are lost when it restarts. For judging, open the link once beforehand to wake it.
+services:
+  - type: web
+    name: chameleon
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py --no-reload --host 0.0.0.0
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: CHAMELEON_QUIET
+        value: "1"
