@@ -119,6 +119,8 @@ if __name__ == '__main__':
     parser.add_argument('--host', default=os.environ.get('HOST', '127.0.0.1'))
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
+    from engine import subject
+    service.load_saved_results(); subject.load_saved()       # saved answers and photo readings, ready at once
     import threading; threading.Thread(target=service.warm_up, daemon=True).start()
     print(f'Chameleon running at http://{"127.0.0.1" if args.host in ("0.0.0.0", "") else args.host}:{args.port}', flush=True)
     try:

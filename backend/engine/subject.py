@@ -351,7 +351,9 @@ def find_subject(node) -> dict:
     if not node.src:
         return {'box': CENTRE, 'source': 'assumed', 'confidence': 0.0}
     key = hashlib.sha1(node.src.encode('utf-8', 'ignore')).hexdigest()
-    if key in _cache:
+    if key in _saved:
+        out = dict(_saved[key])
+    elif key in _cache:
         out = dict(_cache[key])
     else:
         out = _detect(node.src)
@@ -383,6 +385,33 @@ def find_subject(node) -> dict:
 
 
 MODEL_PATH = __import__('pathlib').Path(__file__).resolve().parent / 'models' / 'u2netp.onnx'
+SAVED_FILE = MODEL_PATH.parents[3] / 'examples' / 'subjects-cache.json'
+
+
+def _stamp():
+    """Fingerprint of the detection code and models: saved readings are used only while these are unchanged."""
+    h = hashlib.sha1()
+    for f in [MODEL_PATH.parents[1] / 'subject.py', *sorted(MODEL_PATH.parent.glob('*.onnx'))]:
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+def load_saved():
+    """What detection found in the bundled photos (templates, test set), saved by tools/make_caches.py, so a
+    small host never runs the models for them."""
+    import json
+    try:
+        saved = json.loads(SAVED_FILE.read_text())
+    except (OSError, ValueError):
+        return 0
+    if saved.get('stamp') != _stamp():
+        return 0
+    for k, v in (saved.get('items') or {}).items():
+        _saved[k] = v
+    return len(_saved)
+
+
+_saved: dict = {}
 _MODEL_LOCK = __import__('threading').Lock()
 
 

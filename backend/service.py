@@ -213,32 +213,81 @@ _RESULTS_LOCK = threading.Lock()
 _RESULTS_MAX = 48
 
 
+# Answers saved ahead of time for the requests the bundled pages make (home demo, the sample campaign, the
+# tour, How it works): a small host answers those at once instead of running the engine for a minute.
+# Made by tools/make_caches.py; used only while the engine is unchanged.
+SAVED_RESULTS_FILE = ROOT / 'examples' / 'results-cache.json'
+_SAVED: dict = {}
+_RECORD: dict | None = {} if os.environ.get('CHAMELEON_RECORD') else None
+
+
+def engine_stamp():
+    """A fingerprint of the engine's code, data and models: saved answers are only valid for the same engine."""
+    h = hashlib.sha1()
+    engine = ROOT / 'backend' / 'engine'
+    for f in sorted(list(engine.glob('*.py')) + list(engine.glob('*.json')) + list((engine / 'models').glob('*.onnx'))):
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+def _request_key(kind, data):
+    return kind + hashlib.sha1(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def load_saved_results():
+    try:
+        saved = json.loads(SAVED_RESULTS_FILE.read_text())
+    except (OSError, ValueError):
+        return 0
+    if saved.get('stamp') != engine_stamp():
+        return 0
+    _SAVED.update(saved.get('results') or {})
+    return len(_SAVED)
+
+
 def _remembered(kind, data, compute):
     try:
-        key = kind + hashlib.sha1(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        key = _request_key(kind, data)
     except (TypeError, ValueError):
         return compute(data)
+    if key in _SAVED:
+        return copy.deepcopy(_SAVED[key])
     with _RESULTS_LOCK:
         if key in _RESULTS:
             _RESULTS.move_to_end(key)
             return copy.deepcopy(_RESULTS[key])
     result = compute(data)
+    result = json.loads(json.dumps(result, default=lambda o: o.item() if hasattr(o, 'item') else str(o)))   # plain numbers
     with _RESULTS_LOCK:
         _RESULTS[key] = copy.deepcopy(result)
         while len(_RESULTS) > _RESULTS_MAX:
             _RESULTS.popitem(last=False)
+        if _RECORD is not None:
+            _RECORD[key] = copy.deepcopy(result)
     return result
 
 
 def warm_up():
-    """Load the photo models and read the templates' photos once, in the background at start-up, so the first
-    visitor doesn't wait for it (the first run takes a few seconds; after that a run takes a fraction of one)."""
+    """In the background at start-up, at low priority so it never slows a visitor: load the saved answers and
+    photo readings, then the photo models (the first run of a new photo would otherwise wait for them)."""
+    try:
+        os.nice(15)          # Linux: lowers this thread only
+    except (AttributeError, OSError):
+        pass
+    load_saved_results()
+    from engine import subject
+    subject.load_saved()
     from engine.understand import analyze
     for name in TEMPLATES:
         try:
             analyze(json.loads((TEMPLATE_DIR / f'{name}.json').read_text()), _clean_targets(None)[:1])
         except Exception:
             pass
+    try:
+        subject._u2net(); subject._yolox()
+    except Exception:
+        pass
 
 
 def adapt_request(data):

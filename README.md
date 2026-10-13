@@ -33,7 +33,7 @@ Open http://127.0.0.1:8000 and stop with Control+C.
 Good to know about the free plan:
 
 - It sleeps after 15 minutes without visits, and the next visit takes about a minute to wake it. Open the link a few minutes before a demo.
-- It has a small CPU. Each new photo takes several seconds to analyse there; the templates, the home page and the report are ready at once.
+- It has a small CPU (a tenth of one). The home page, the templates, the tour, How it works and the report are answered from the saved files at once. Anything new (your own photo, an edited design) runs the engine there: up to a minute or two right after it wakes, then faster.
 - Saved campaigns are lost when it restarts. Each visitor sees only their own campaigns.
 - For judging, the paid Starter plan (5x the CPU, never sleeps) is faster. Change `plan: free` in `render.yaml`, or change the plan in Render's dashboard.
 
@@ -68,7 +68,7 @@ More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/S
 | `frontend/` | The Studio, home, How it works, Engine room and report pages: plain JS and Canvas, no build step |
 | `examples/templates/` | Starter designs with real photos |
 | `examples/testset/` | The test set used by the Engine room, the report and the tests: 36 designs (12 hand-laid seeds and 24 with real photos), from 160×600 to 1080×1920 |
-| `tools/` | Scripts that regenerate `fonts.json`, the test set (`make_seed_testset.py`, `make_photo_testset.py`) and the saved report (`make_eval_report.py`) |
+| `tools/` | Scripts that regenerate `fonts.json`, the test set (`make_seed_testset.py`, `make_photo_testset.py`) and the saved answers and report (`make_caches.py`, `make_eval_report.py`) |
 | `tests/` | Engine, HTTP and browser (Playwright) tests |
 | `docs/`, `design-system/` | Engine notes, strategy, plan; UI tokens and rules |
 
@@ -88,7 +88,7 @@ More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/S
 - **Models load at start-up.** The photo models load in the background when the server starts, so the first visitor doesn't wait for them.
 - **The background ribbon doesn't slow the page.** It is drawn in a background worker at 30 frames a second and stops when you scroll past it.
 - **The home page loads in order.** The hero shows the design first. The sections below load as you scroll toward them.
-- **The report is saved.** `examples/eval-report.json` holds the scores for the whole test set. The server uses it while the test set and engine are unchanged, so `/report` opens at once even on a small host. Run `python tools/make_eval_report.py` after changing either.
+- **First visits are answered ahead of time.** The engine's answers for the requests the bundled pages make are saved in `examples/results-cache.json`: the home demo, each template opened in the Studio, the tour, How it works and the Engine room. What detection finds in every bundled photo is saved in `examples/subjects-cache.json`, and the test-set report in `examples/eval-report.json`. A small host answers all of these at once instead of running the engine for minutes. Each file carries a fingerprint of the engine and is ignored once the engine changes. Run `python tools/make_caches.py` after changing the engine, the templates or the test set (it needs Playwright).
 
 ## Tests
 

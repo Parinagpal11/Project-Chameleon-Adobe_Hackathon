@@ -11,6 +11,8 @@ app = FastAPI(title='Chameleon')
 @app.on_event('startup')
 def warm_up():
     import threading
+    from engine import subject
+    service.load_saved_results(); subject.load_saved()
     threading.Thread(target=service.warm_up, daemon=True).start()
 
 
