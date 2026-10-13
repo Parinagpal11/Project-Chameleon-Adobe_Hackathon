@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 
 from .graph import Box, Graph, Node, load
-from .subject import find_subject, smart_crop
+from .subject import crop_kw, find_subject, smart_crop
 
 ROLE_WEIGHT = {
     'headline': 1.0, 'hero': .95, 'cta': .9, 'offer': .85, 'logo': .8, 'subhead': .7, 'photo': .65,
@@ -709,7 +709,7 @@ def analyze(design, targets: list[dict] | None = None) -> dict:
                     # (new sizes still re-crop around the subject)
                     sub.update(crop=list(n.crop), kept=_kept_in(sub, n.crop))
                 else:   # detected on the whole photo: choose the crop around the subject
-                    sub.update(smart_crop(sub['box'], sub['aspect'], slot, sub.get('parts')))
+                    sub.update(smart_crop(sub['box'], sub['aspect'], slot, sub.get('parts'), **crop_kw(sub, scored=True)))
                 cx, cy, cw, ch = sub['crop']
             else:
                 # given by the designer (relative to the slot as shown) or photo not readable:

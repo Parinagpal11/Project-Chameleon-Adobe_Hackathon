@@ -547,6 +547,50 @@ def _yolox():
     return _models['yolox']
 
 
+YUNET_PATH = MODEL_PATH.parent / 'face_detection_yunet_2023mar.onnx'
+
+
+def _closeup_face(img):
+    """A face filling most of the frame (a beauty close-up), which the Haar detector misses because it never
+    sees a whole face at its scales. YuNet (MIT, OpenCV Zoo) finds it; the subject is the eyes, nose and mouth
+    from its landmarks, padded, so a crop keeps the features rather than a cheek.
+    Returns (box, parts) image-relative, or None. Only faces at least 40% of the photo's short side count:
+    smaller faces are the Haar detector's job (it is tuned against false positives on this project's photos)."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+    if not hasattr(cv2, 'FaceDetectorYN') or not YUNET_PATH.exists():
+        return None
+    try:
+        small = img.copy()
+        small.thumbnail((320, 320))
+        a = np.ascontiguousarray(np.asarray(small)[:, :, ::-1])
+        h, w = a.shape[:2]
+        with _MODEL_LOCK:
+            if 'yunet' not in _models:
+                _models['yunet'] = cv2.FaceDetectorYN.create(str(YUNET_PATH), '', (w, h), .88, .3, 5)
+            det = _models['yunet']
+            det.setInputSize((w, h))
+            _, faces = det.detect(a)
+    except Exception:
+        return None
+    if faces is None:
+        return None
+    best = max(faces, key=lambda f: f[14])
+    if best[14] < .88 or min(best[2] / w, best[3] / h) * min(w, h) < .4 * min(w, h):
+        return None
+    xs = [best[4 + 2 * i] / w for i in range(5)]
+    ys = [best[5 + 2 * i] / h for i in range(5)]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    pw, ph = (x1 - x0) * .35 + .02, (y1 - y0) * .35 + .02          # brows above the eyes, chin below the mouth
+    x0, y0 = max(0.0, x0 - pw), max(0.0, y0 - ph)
+    x1, y1 = min(1.0, x1 + pw), min(1.0, y1 + ph)
+    box = [round(float(x0), 4), round(float(y0), 4), round(float(x1 - x0), 4), round(float(y1 - y0), 4)]
+    return box, [box]
+
+
 def _persons(img, conf: float = .4) -> list:
     """People found by YOLOX-Nano: [(score, [x, y, w, h])] image-relative. A learned detector finds people
     sitting, side-on, small or half in shadow, which the HOG and face detectors miss."""
@@ -626,6 +670,9 @@ def _detect(src: str) -> dict:
             return _people_result(crowd, aspect, .85)
         return {'box': [round(v, 4) for v in box], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect,
                 'parts': [[round(v, 4) for v in p] for p in parts]}
+    close = _closeup_face(img)
+    if close:
+        return {'box': close[0], 'source': 'faces', 'confidence': 0.9, 'aspect': aspect, 'parts': close[1]}
     # 2. the salient-object model (the standard approach in modern cut-out / smart-crop tools)
     if omap is not None:
         found = objects_from_map(omap)
@@ -737,12 +784,24 @@ def _iou(a, b) -> float:
     return ix / u if u > 0 else 0.0
 
 
-def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: list | None = None) -> dict:
+def crop_kw(sub: dict, scored: bool = False) -> dict:
+    """How smart_crop should treat this subject: standing people keep their heads. `scored` (the crop that is
+    reported and scored): several objects spread across the photo are measured by their middles. Layout
+    decisions use the plain share, so they still keep as much of every object as they can."""
+    return {'heads': sub.get('source') == 'people',
+            'spread': scored and sub.get('source') == 'objects' and len(sub.get('parts') or []) >= 2}
+
+
+def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: list | None = None, heads: bool = False,
+               spread: bool = False) -> dict:
     """The part of the photo to show in a slot of another shape: as large as possible (cover fit),
     slid along the free axis to keep as much of the subject as it can, never past the photo's edges.
 
     `parts` are separate subjects (e.g. each person's face). If they don't all fit, the window keeps
     the most of them it can (by area) instead of centring on the empty space between them.
+    `heads`: the subject is standing people; when they are taller than the window, the top (faces) is kept.
+    `spread`: several objects laid out across the photo (a flat-lay): `kept` counts the middle of each object
+    as much as its whole area, so trimming the rim of a bowl is not scored like losing the bowl.
     Returns image-relative `crop` [x, y, w, h] and `kept`, the share of the subject(s) inside it."""
     parts = parts or [subject]
     if not (image_aspect > 0 and slot_aspect > 0) or not all(map(math.isfinite, (image_aspect, slot_aspect))):
@@ -773,18 +832,44 @@ def smart_crop(subject: list, image_aspect: float, slot_aspect: float, parts: li
             if .05 < f < .95:
                 bad += a * min(f, 1 - f)
         return bad / tot if tot > 0 else 0.0
+    def head_cut(pos):
+        """Share of the people's heads (top 18% of each) outside the window: legs can go, heads can't."""
+        if not heads or wide:
+            return 0.0
+        tot = bad = 0.0
+        for px, py, pw, ph in parts:
+            top = max(0.0, py - ph * .04)          # a little room above the head
+            hh = py + ph * .18 - top
+            inside = max(0.0, min(top + hh, pos + ch) - max(top, pos))
+            tot += pw * hh; bad += pw * (hh - inside)
+        return bad / tot if tot > 0 else 0.0
     sx, sy, sw, sh = subject
     centre = (sx + sw / 2 if wide else sy + sh / 2) - size / 2
+    if heads and not wide and size < sh:
+        centre = sy - min(.03, size * .05)     # standing people taller than the window: keep heads, cut legs (not the reverse)
     best = min(max(centre, 0.0), 1.0 - size)
     best_kept = covered(best)
     if best_kept < .999:          # not everything fits: keep the most, without slicing through a face or object
         steps = 60
-        best_val = best_kept - sliced(best)
+        best_val = best_kept - sliced(best) - 2 * head_cut(best)
         for i in range(steps + 1):
             pos = (1.0 - size) * i / steps
             k = covered(pos)
-            v = k - sliced(pos)
+            v = k - sliced(pos) - 2 * head_cut(pos)
             if v > best_val + 1e-6 or (abs(v - best_val) <= 1e-6 and abs(pos - centre) < abs(best - centre)):
                 best, best_kept, best_val = pos, k, v
+    if spread and best_kept < .999:
+        cx0, cy0 = (best, 0.0) if wide else (0.0, best)
+        tot = got = 0.0
+        for px, py, pw, ph in parts:
+            qx, qy, qw, qh = px + pw * .2, py + ph * .2, pw * .6, ph * .6
+            a_ = qw * qh
+            tot += a_
+            got += max(0.0, min(qx + qw, cx0 + cw) - max(qx, cx0)) * max(0.0, min(qy + qh, cy0 + ch) - max(qy, cy0))
+        if tot > 0:
+            best_kept = .5 * best_kept + .5 * got / tot
+    if heads and not wide and best_kept < .999:
+        # people cut at the legs still read as the people: count each one's head as most of them
+        best_kept = .6 * (1 - head_cut(best)) + .4 * best_kept
     cx, cy = (best, 0.0) if wide else (0.0, best)
     return {'crop': [round(cx, 4), round(cy, 4), round(cw, 4), round(ch, 4)], 'kept': round(best_kept, 3)}

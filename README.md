@@ -62,7 +62,7 @@ More detail is in [docs/ENGINE.md](docs/ENGINE.md), with the strategy in [docs/S
 
 | Path | What's there |
 |---|---|
-| `backend/engine/` | The layout engine (above). `models/` holds the photo models (U²-Net-P for the main subject, YOLOX-Nano for people); `fonts.json` holds glyph widths for measuring text. |
+| `backend/engine/` | The layout engine (above). `models/` holds the photo models (U²-Net-P for the main subject, YOLOX-Nano for people, YuNet for close-up faces); `fonts.json` holds glyph widths for measuring text. |
 | `backend/service.py` | Request handling, project storage (SQLite), templates, result cache, start-up warm-up |
 | `backend/local_server.py` | The default HTTP server. `backend/main.py` is an optional FastAPI version of it. |
 | `frontend/` | The Studio, home, How it works, Engine room and report pages: plain JS and Canvas, no build step |
@@ -102,5 +102,5 @@ The browser tests (`test_ui_e2e.py`, `test_xray_e2e.py`) drive the real pages in
 
 - Input is Chameleon JSON, the templates, or your own photo and logo. There is no Figma or PSD import yet.
 - There are no accounts or sharing. On a shared server each browser sees only its own campaigns.
-- Some subjects are hard to find: a face filling the whole frame, a small landmark far away, people sitting at the very edges of a photo.
-- A small banner can't always show a wide subject whole, such as a row of eight people in a 300×250 ad. Those sizes are scored for what they lose.
+- Some subjects are hard to find: a thin landmark seen from far away (the Eiffel Tower in a city view) is missed by the object model.
+- A small banner can't always show a wide subject whole. The engine tries a wider photo column and a shorter photo above the copy, and scores each for what it loses.
