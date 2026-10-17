@@ -97,7 +97,7 @@ Building blocks: text stacks re-wrap; an avatar or icon beside its text goes abo
 
 Distortion and letterbox framing are properties of how a design is drawn, not of its node data, so the baselines pass them in (`distortion`, `frame`); Chameleon draws 1:1 and crops photos, never stretching them.
 
-**Evaluation report.** `GET /eval` scores every test design at the 8 sizes (cached until a design or the engine changes); `/report` shows it: the averages, each part, every design × size with Chameleon's lead over the best naive resize, and the ten lowest cases to fix next. On the 12 seed designs: Chameleon 97.6, letterbox 69.7, stretch 55.2, centre crop 45.9; Chameleon scores highest in 81 of 96 cases, ties in 15 (where a naive resize already keeps everything: the original size, or a shape close enough) and never scores lower.
+**Evaluation report.** `GET /eval` scores every test design at the 8 sizes (cached until a design or the engine changes); `/report` shows it: the averages, each part, every design × size with Chameleon's lead over the best naive resize, and the ten lowest cases to fix next. On the full test set (36 designs × 8 sizes = 288 cases): Chameleon 99.1, letterbox 69.7, stretch 55.0, centre crop 41.8; Chameleon scores highest in 254 cases, ties in 34 (where a naive resize already keeps everything: the original size, or a shape close enough) and never scores lower.
 
 ## 4. Test set
 

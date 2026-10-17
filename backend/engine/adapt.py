@@ -476,9 +476,11 @@ class RepeatItem:
     def layout(self, k: float, avail_w: float):
         n = len(self.cards)
         max_cols = n if self.orig_cols == n else max(self.orig_cols, 2)
+        if self.flex and avail_w >= 330 and n >= 3:
+            max_cols = max(max_cols, 3)     # a text list on a wide, short banner: three columns before fewer items
         if self.flex:
             return self._flex_layout(k, avail_w, max_cols)
-        u = max(c.uk(k) for c in self.cards)
+        u = max(c.uk(k) for c in self.cards) * getattr(self, 'squeeze', 1.0)
         if self.max_h:                      # a column of its own: pick the arrangement that shows the cards largest
             floor = max(c.uk(0) for c in self.cards)
             best = None
@@ -1450,9 +1452,17 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
             hero = max(cands, key=lambda gr: gr['box'][2] * gr['box'][3])
             if hero['box'][2] * hero['box'][3] < g.width * g.height * .08:
                 hero = None
+            # photos side by side as one series ('Summer or snow?': one photo each): they move as one picture area
+            # and are split again in the new slot, so neither gets dropped as a small extra
+            rep = next((b for b in a.get('blocks', []) if b['kind'] == 'repeat' and hero and hero['id'] in b['groups']), None)
+            mates = [gr for gr in cands if rep and gr is not hero and gr['id'] in rep['groups']
+                     and gr['box'][2] * gr['box'][3] >= hero['box'][2] * hero['box'][3] * .6] if hero else []
+            if mates and len(mates) <= 2:
+                series = sorted([hero] + mates, key=lambda gr: (gr['box'][1], gr['box'][0]))
+                hero = {**hero, 'box': Box.bound([Box.of(gr['box']) for gr in series]).list(), '_series': series}
     logo = [gr for gr in a['groups'] if gr['role'] == 'logo']
     legal = [gr for gr in a['groups'] if gr['role'] == 'legal']
-    used = {gr['id'] for gr in ([hero] if hero else []) + logo + legal}
+    used = {gr['id'] for gr in ([hero] if hero else []) + logo + legal + ((hero or {}).get('_series') or [])}
     copy_groups = [gr for gr in a['groups'] if gr['id'] not in used and gr['role'] != 'background']
     order = {gid: i for i, gid in enumerate(a['reading_order'])}
     copy_groups.sort(key=lambda gr: order.get(gr['id'], 99))
@@ -1602,7 +1612,23 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
             fw, fh = (pw, pw / ia) if pw / ph < ia else (ph * ia, ph)
             photo_region = Box(photo_region.x + (pw - fw) / 2, photo_region.y + (ph - fh) / 2, fw, fh)
             reasons.append('All of the photo is shown, as asked.')
-        if photo_region:
+        if photo_region and hero.get('_series'):
+            # split the picture area again: side by side when that keeps each slot closer to its photo's shape
+            series = hero['_series']
+            n_ = len(series)
+            gap_ = max(4.0, m * .4)
+            pa = sum(Box.of(gr['box']).w / max(1.0, Box.of(gr['box']).h) for gr in series) / n_
+            side_w = (photo_region.w - gap_ * (n_ - 1)) / n_
+            side_h = (photo_region.h - gap_ * (n_ - 1)) / n_
+            err = lambda a_: abs(math.log(max(1e-3, a_) / pa))
+            across = err(side_w / max(1.0, photo_region.h)) <= err(photo_region.w / max(1.0, side_h))
+            for i, gr in enumerate(series):
+                slot = Box(photo_region.x + i * (side_w + gap_), photo_region.y, side_w, photo_region.h) if across else \
+                    Box(photo_region.x, photo_region.y + i * (side_h + gap_), photo_region.w, side_h)
+                for nid in gr['members']:
+                    _set_photo(out, g.by_id[nid], slot.list())
+            reasons.append(f'The {n_} photos stay together as a set, ' + ('side by side.' if across else 'one above the other.'))
+        elif photo_region:
             for nid in hero['members']:
                 _set_photo(out, g.by_id[nid], photo_region.list())
 
@@ -1882,6 +1908,12 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
     def fit_all(k_, gap_):
         return all(fits(its, reg, k_, gap_) for its, reg in columns())
 
+    def overflow(k_, gap_):
+        """How far the stacked copy runs past its area (px): to see whether shrinking the type still helps."""
+        return max((sum(it.measure(k_, reg.w)[1] for it in its) + gap_ * max(0, len(its) - 1) - reg.h
+                    for its, reg in columns() if its), default=0.0)
+
+    stall, last_ov = 0, None
     for _ in range(300):
         if fit_all(k, gap):
             break
@@ -1894,10 +1926,16 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
         droppable = any(it.role not in protected for it in allitems) or \
             any(it.reflowable() and len(it.texts) > 1 and any(roles.get(n.id) not in protected for n in it.texts) for it in allitems)
         keeps_rank = head * .94 >= MIN_TEXT * 1.3 or not droppable   # the headline stays clearly the biggest line
-        if keeps_rank and (smallest > MIN_TEXT * 1.02 or (smallest >= MIN_TEXT * .74 and largest >= MIN_TEXT * 1.6)):
+        if not row:
+            ov = overflow(k, gap)
+            # shrinking no longer helps (what is too tall is already at its 12 px floor, like cards): drop instead
+            stall = stall + 1 if last_ov is not None and ov > last_ov - max(1.0, H * .004) else 0
+            last_ov = ov
+        if keeps_rank and stall < 6 and (smallest > MIN_TEXT * 1.02 or (smallest >= MIN_TEXT * .74 and largest >= MIN_TEXT * 1.6)):
             k *= .94
             gap = max(gap_base * .4, gap * .97)
             continue
+        stall, last_ov = 0, None
         # drop the least important piece: a line inside a text stack, or a whole item
         cand = sorted([it for it in allitems if it.role not in protected], key=lambda it: it.importance())
         lines = [(DROP_ORDER.index(roles.get(n.id, 'body')) if roles.get(n.id, 'body') in DROP_ORDER else 99, it, n)
@@ -1912,9 +1950,15 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
             for it in allitems:
                 it.display_floor = 24.0 if min(W, H) >= 400 else (20.0 if min(W, H) >= 200 else 16.0)   # small ads go lower
             disp = [it for it in allitems if it.reflowable() and it.display_size(k) > it.display_floor + .5]
-            if disp:
-                big = max(disp, key=lambda it: it.display_size(k))
+            shrunk = False
+            for big in sorted(disp, key=lambda it: -it.display_size(k)):
+                before = big.display_size(k)
                 big.xs *= .9
+                if big.display_size(k) < before - .01:     # (text already at its floor can't shrink further)
+                    shrunk = True
+                    break
+                big.xs /= .9
+            if shrunk:
                 continue
         if lines and (not cand or lines[0][0] <= cand[0].importance()):
             _, it, n = lines[0]
@@ -1928,6 +1972,10 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
             if isinstance(victim, RepeatItem) and victim.can_go_captionless() and not getattr(victim, 'captionless', False):
                 victim.go_captionless()
                 dropped.append('card captions')
+                continue
+            if isinstance(victim, RepeatItem) and getattr(victim, 'captionless', False) and not victim.flex \
+                    and getattr(victim, 'squeeze', 1.0) > .6:
+                victim.squeeze = getattr(victim, 'squeeze', 1.0) * .9   # pictures without captions can just get smaller
                 continue
             if isinstance(victim, RepeatItem) and len(victim.cards) > 2:
                 victim.cards.pop()          # fewer cards before no cards
@@ -2064,6 +2112,9 @@ def _reflow_one(design: dict, g, a: dict, W: float, H: float, tier: int, orient=
     res['_args'] = {**args, 'fill': fill, 'tier': tier}
     if backdrop:
         res['design'].setdefault('page', {})['backdrop'] = backdrop
+        # the copy now sits on the darkened photo, not the page colour: light ink where dark ink would vanish
+        _legible_on_photos(res['design']['nodes'], a, W, H, res['reasons'], backdrop)
+        res['checks'] = check(res['design'], a, {'_': res['checks']['subject_kept']} if res['checks'].get('subject_kept') is not None else {})
     has_cards = any(isinstance(it, RepeatItem) and not it.flex for it in items)
     res['layout'] = {
         'photo': photo_mode if (hero and photo_region) else None,
@@ -2191,17 +2242,28 @@ def backdrop(design: dict, n: dict):
                     break
                 veils.append((st.get('fill'), op))
     if base is None:
-        base = (design.get('page') or {}).get('background', '#ffffff')
+        page = design.get('page') or {}
+        bd = page.get('backdrop')
+        img = next((m for m in design['nodes'] if bd and m['id'] == bd.get('image')), None)
+        if img is not None:
+            # the page is that photo, blurred and darkened (drawn as "cover" over the whole page)
+            col = _photo_colour({**img, 'box': [0, 0, page.get('width', 1), page.get('height', 1)], 'crop': None}, n['box'])
+            if col is None:
+                return None
+            base = _blend(col, '#000000', float(bd.get('dim', .5) if bd.get('dim') is not None else .5))
+        else:
+            base = page.get('background', '#ffffff')
     for fill, op in reversed(veils):
         base = _blend(base, fill, op)
     return base
 
 
-def _legible_on_photos(nodes: list, a: dict, W: float, H: float, reasons: list):
+def _legible_on_photos(nodes: list, a: dict, W: float, H: float, reasons: list, page_backdrop=None):
     """Text sitting straight on a photo (a logo, an eyebrow) that the photo there makes hard to read is set in
-    the design's light or dark ink instead, whichever reads better."""
+    the design's light or dark ink instead, whichever reads better. With `page_backdrop` (the page is the photo,
+    blurred and darkened), text on the page counts as text on that photo."""
     roles = {k: v['role'] for k, v in a['roles'].items()}
-    d = {'page': {'width': W, 'height': H}, 'nodes': nodes}
+    d = {'page': {'width': W, 'height': H, **({'backdrop': page_backdrop} if page_backdrop else {})}, 'nodes': nodes}
     texts = [m for m in nodes if m['type'] == 'text' and not m.get('hidden') and (m.get('text') or '').strip()]
     inks = [ink(m) for m in texts if _rgb(ink(m))]
     lum = lambda c: sum(_rgb(c)) / 3
@@ -2215,11 +2277,13 @@ def _legible_on_photos(nodes: list, a: dict, W: float, H: float, reasons: list):
         cx, cy = m['box'][0] + m['box'][2] / 2, m['box'][1] + m['box'][3] / 2
         under = next((q for q in reversed(nodes[:nodes.index(m)]) if q['type'] in ('image', 'shape') and not q.get('hidden')
                       and q['box'][0] <= cx <= q['box'][0] + q['box'][2] and q['box'][1] <= cy <= q['box'][1] + q['box'][3]), None)
-        if under is None or under['type'] != 'image':
+        if under is None and page_backdrop:
+            under = {'type': 'blurred page'}
+        elif under is None or under['type'] != 'image':
             continue      # on a flat colour: the designer chose that pairing
         bg = backdrop(d, m)
         c = contrast(ink(m), bg)
-        spread = _photo_colour(under, m['box'], busy=True) or 0
+        spread = _photo_colour(under, m['box'], busy=True) or 0 if under['type'] == 'image' else 0
         need = 4.5 if spread > 40 else 3.0          # a busy patch of photo needs a stronger contrast
         if c is None or c >= need:
             continue
