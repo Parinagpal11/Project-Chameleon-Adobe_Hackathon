@@ -46,7 +46,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Cache-Control', cache)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != 'HEAD':      # HEAD gets the headers, never the body
+            self.wfile.write(body)
 
     def body(self):
         size = int(self.headers.get('Content-Length', '0'))
@@ -59,7 +60,8 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(path.query)
         campaign = q.get('campaign', [''])[0]
         owner = self.headers.get('X-Chameleon-Owner', '')
-        p, m = path.path, self.command
+        p = path.path
+        m = 'GET' if self.command == 'HEAD' else self.command   # HEAD reads like GET, minus the body
         try:
             if m == 'GET':
                 if p == '/health': return self.send(200, {'status': 'ok'})
@@ -110,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
             import traceback; traceback.print_exc()
             self.send(500, {'detail': 'Unexpected server error; inspect terminal.'})
 
-    do_GET = do_POST = do_DELETE = do_PUT = dispatch
+    do_GET = do_HEAD = do_POST = do_DELETE = do_PUT = dispatch
 
 
 if __name__ == '__main__':
